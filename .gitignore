@@ -1,0 +1,58 @@
+# ============================================================================
+# 版权与合规声明
+#
+# 本仓库是《Luck be a Landlord》的**纯学术机制分析**，不含、也不分发原作品的
+# 任何代码、资源或可执行文件。以下路径仅存在于作者本地，用于研究过程中的
+# 事实核对；入库内容仅限 docs/ 的机制与算法结论文档、data/ 的数值结论表、
+# 以及 web/ 这个可运行的复现台。
+#
+# 参见 README.md 与 docs/ 顶部的合规说明。
+# ============================================================================
+
+# --- 原始商业作品（绝不入库）---
+*.apk
+*.apks
+*.xapk
+*.aab
+*.pck
+*.pck.bak
+*.zip
+
+# --- 反编译产物（Android 包解包后的 dex / java / 资源）---
+analysis/luckll/
+luckll/
+
+# --- 从场景内嵌子资源中提取的游戏源码（GDScript）---
+analysis/luckll_scripts/
+luckll_scripts/
+
+# --- 研究脚本（本地，不入库）---
+#     只放行发布检查脚本，保证 CI 能跑同一套断言；
+#     lbal_*.py / verify.py / pck_extract.py 仍留在本地。
+analysis/*
+!analysis/preflight.ts
+!analysis/rent-model.ts
+
+# --- 原始资源 JSON 与叙事文本（本地研究材料，只允许存在于 analysis/data/）---
+#     该目录整体被上面的 analysis/* 覆盖；此处再显式声明一次，
+#     避免将来给 analysis/ 加白名单时误放行原作资源。
+analysis/data/
+#     构建数据目录出问题时的兜底规则
+data/raw/
+data/emails.csv
+
+# --- 代码结构派生物（函数名 / 行号 / 分支位置；可本地重生成）---
+data/source_index.csv
+data/symbol_effects.csv
+
+# --- 网页构建产物（由 CI 生成）---
+web/node_modules/
+web/dist/
+web/src/data/*.json
+
+# --- 浏览器自动化调试产物 ---
+.playwright-cli/
+
+# --- 系统 ---
+.DS_Store
+Thumbs.db
