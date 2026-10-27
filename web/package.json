@@ -1,9 +1,9 @@
 {
-  "name": "lbal-lab",
+  "name": "landlordlike",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Static web reproduction of the analysis results in ../docs",
+  "description": "LandlordLike — 模拟幸运房东",
   "scripts": {
     "gen": "node scripts/gen-data.mjs",
     "dev": "node scripts/gen-data.mjs && vite",
