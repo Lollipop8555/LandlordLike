@@ -252,7 +252,7 @@ function renderDeclarations(id: string): string {
     const text = describeRule(rule, owner);
     if (text && !texts.includes(text)) texts.push(text);
   }
-  const head = `<div class="decl-head">${symbolName(id)}${def ? '' : ''} <span class="muted small">原名 ${id}</span></div>`;
+  const head = `<div class="decl-head">${symbolName(id)} <span class="muted small">原名 ${id}</span></div>`;
   if (texts.length === 0) {
     return `
       <div class="decls">
