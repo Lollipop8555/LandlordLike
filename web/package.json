@@ -1,0 +1,19 @@
+{
+  "name": "lbal-lab",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Static web reproduction of the analysis results in ../docs",
+  "scripts": {
+    "gen": "node scripts/gen-data.mjs",
+    "dev": "node scripts/gen-data.mjs && vite",
+    "build": "node scripts/gen-data.mjs && tsc --noEmit && vite build",
+    "sim": "esbuild scripts/sim.ts --bundle --format=esm --platform=node --outfile=node_modules/.cache/lbal-sim.mjs --log-level=warning && node node_modules/.cache/lbal-sim.mjs",
+    "verify": "esbuild ../analysis/preflight.ts --bundle --format=esm --platform=node --outfile=../analysis/.build/preflight.mjs --log-level=warning && node ../analysis/.build/preflight.mjs && esbuild ../analysis/rent-model.ts --bundle --format=esm --platform=node --outfile=../analysis/.build/rent-model.mjs --log-level=warning && node ../analysis/.build/rent-model.mjs",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
