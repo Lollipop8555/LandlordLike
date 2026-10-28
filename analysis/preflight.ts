@@ -27,7 +27,22 @@ import {
   SYMBOLS,
 } from '../web/src/data';
 import { emojiOf } from '../web/src/sprites';
-import { buyFromShop, closeShop, createGame, isItemDef, payRent, spin } from '../web/src/engine';
+import {
+  BOSS_HP,
+  buyFromShop,
+  closeShop,
+  createGame,
+  essenceUpgrade,
+  isItemDef,
+  markMailRead,
+  payRent,
+  removeSymbolAt,
+  rerollShop,
+  spin,
+  startBossFight,
+  unreadMails,
+} from '../web/src/engine';
+import { comradeValues, tagOf } from '../web/src/mail';
 import { CELL_COUNT, COLS, ROWS, SLOTS_PER_REEL } from '../web/src/grid';
 import { runSelfChecks } from '../web/src/selfcheck';
 
@@ -311,9 +326,11 @@ function playOnce(seed: number): Run {
     if (pick < 0) pick = g.shop.findIndex((c) => isItemDef(c.def));
     if (pick < 0) pick = 0;
     const buyingItem = isItemDef(g.shop[pick].def);
+    const buyingToken = Boolean(g.shop[pick].token);
     const before = g.pool.length;
     if (!buyFromShop(g, pick)) return;
-    if (!buyingItem && g.pool.length !== before + 1) issues.push('买入后池未增长');
+    // 代币卡不放进池，只加货币
+    if (!buyingItem && !buyingToken && g.pool.length !== before + 1) issues.push('买入后池未增长');
     if (g.pool.length > 25) issues.push(`池超容 ${g.pool.length}`);
     closeShop(g);
   };
@@ -365,6 +382,255 @@ const rate = wins / SEEDS;
 check('B 引擎', '12 期可达（基线内存在通关局）', wins > 0, `${wins}/${SEEDS}`);
 check('B 引擎', '通关不是送分（通关率 < 40%）', rate < 0.4, `${(rate * 100).toFixed(1)}%`);
 info('B 引擎', '基线通关率', `${(rate * 100).toFixed(1)}% · ${deathAt} 局破产`);
+
+/** 房东之战：通关 → 750 血 → 金币换伤害 → 倒下才算真结局 */
+function bossFightIssues(): string[] {
+  const issues: string[] = [];
+  const g = createGame(1234);
+  g.rentPaid = 11;
+  g.payment = 11;
+  g.spinsLeft = 0;
+  g.coins = 100000;
+
+  const pay = payRent(g);
+  if (!pay.ok) issues.push('第 12 期付租失败');
+  if (!g.won) issues.push('付满 12 期未置通关');
+  if (g.over) issues.push('通关时同时置破产');
+  if (g.shopOpen) issues.push('通关后仍起商店');
+
+  startBossFight(g);
+  if (g.won) issues.push('进入房东战后仍标记通关');
+  if (!g.boss?.active) issues.push('房东战未激活');
+  if (g.boss?.maxHp !== BOSS_HP) issues.push(`房东血量不是 ${BOSS_HP}`);
+  if (g.spinsLeft < 5) issues.push('房东战未补旋转');
+
+  // 第一刀：旋转用尽 → 付租按钮＝攻击，金币直接换成伤害
+  g.spinsLeft = 0;
+  g.coins = 300;
+  if (!payRent(g).ok) issues.push('房东战攻击失败');
+  if (g.boss?.hp !== BOSS_HP - 300) issues.push(`伤害未结算 ${g.boss?.hp}`);
+  if (g.coins !== 0) issues.push('攻击后金币未清零');
+  if (g.spinsLeft !== 5) issues.push('未击杀未补旋转');
+
+  // 收尾一刀：血量归零 → 房东倒下、置通关
+  g.spinsLeft = 0;
+  g.coins = BOSS_HP;
+  payRent(g);
+  if (g.boss?.active) issues.push('血量归零后房东仍存活');
+  if (!g.won) issues.push('击败房东未置通关');
+  if (g.over) issues.push('击败房东时同时置破产');
+  return issues;
+}
+
+const bossIssues = bossFightIssues();
+check('B 引擎', '房东战流程闭环', bossIssues.length === 0, bossIssues.slice(0, 3).join(' · '));
+
+/* ── 三种代币（原版 reroll / removal / essence）── */
+
+/** 依次递增的确定性 rand */
+function sequencer(step = 0.137): () => number {
+  let v = 0.113;
+  return () => {
+    v = (v + step) % 1;
+    return v;
+  };
+}
+
+const fresh = createGame(4321);
+check(
+  'B 引擎',
+  '初始无代币、成本各 1',
+  fresh.rerollTokens === 0 &&
+    fresh.removalTokens === 0 &&
+    fresh.essenceTokens === 0 &&
+    fresh.rerollCost === 1 &&
+    fresh.removalCost === 1,
+  `r=${fresh.rerollTokens} m=${fresh.removalTokens} e=${fresh.essenceTokens}`,
+);
+
+// 商店代币卡：rand 恒 0 → drawCard 必走 token 分支
+const tokenShop = createGame(99);
+tokenShop.rand = () => 0;
+tokenShop.spinsLeft = 0;
+tokenShop.coins = 100000;
+payRent(tokenShop);
+const tokenCard = tokenShop.shop[0];
+check(
+  'B 引擎',
+  '商店能出代币卡',
+  Boolean(tokenCard?.token),
+  tokenShop.shop.map((c) => c.token ?? c.def.id).join(','),
+);
+buyFromShop(tokenShop, 0);
+check(
+  'B 引擎',
+  '代币卡买到即入账',
+  tokenShop.rerollTokens + tokenShop.removalTokens + tokenShop.essenceTokens === 1,
+  `r=${tokenShop.rerollTokens} m=${tokenShop.removalTokens} e=${tokenShop.essenceTokens}`,
+);
+
+const rr = createGame(7);
+rr.rand = sequencer();
+rr.spinsLeft = 0;
+rr.coins = 100000;
+payRent(rr);
+rr.rerollTokens = 3;
+const shopBefore = rr.shop.map((c) => c.def.id).join(',');
+const rrRes = rerollShop(rr);
+check(
+  'B 引擎',
+  '重掷：扣代币并换一批候选',
+  rrRes.ok && rr.rerollTokens === 2 && rr.shop.length === 3,
+  `ok=${rrRes.ok} tokens=${rr.rerollTokens} ${shopBefore} → ${rr.shop.map((c) => c.def.id).join(',')}`,
+);
+
+const rm = createGame(5);
+spin(rm);
+rm.removalTokens = 2;
+const rmIdx = rm.cells.findIndex((c) => c.def);
+const poolBefore = rm.pool.length;
+const rmRes = removeSymbolAt(rm, rmIdx);
+check(
+  'B 引擎',
+  '移除符号：扣代币、清格、池同步',
+  rmRes.ok && rm.removalTokens === 1 && rm.pool.length === poolBefore - 1 && !rm.cells[rmIdx]?.def,
+  `ok=${rmRes.ok} tokens=${rm.removalTokens} pool=${poolBefore}→${rm.pool.length}`,
+);
+
+const es = createGame(11);
+es.essenceTokens = 1;
+es.items.push({ def: PLACEABLES.find((p) => p.id === 'chili_powder') ?? ITEMS[0], count: 1 });
+const baseId = es.items[0].def.id;
+const esRes = essenceUpgrade(es, baseId);
+check(
+  'B 引擎',
+  '精华升级：换 def 并消耗代币',
+  esRes.ok && es.essenceTokens === 0 && es.items[0].def.id === `${baseId}_essence`,
+  `ok=${esRes.ok} ${baseId} → ${es.items[0].def.id} tokens=${es.essenceTokens}`,
+);
+
+const carry = createGame(13);
+carry.essenceTokens = 3;
+carry.spinsLeft = 0;
+carry.coins = 100000;
+payRent(carry);
+check('B 引擎', '付租后未用精华作废', carry.essenceTokens === 0, `e=${carry.essenceTokens}`);
+
+const dudRun = createGame(3);
+dudRun.floor = 10;
+dudRun.rentPaid = 3;
+dudRun.totalSpins = 25;
+const dudBefore = dudRun.pool.filter((d) => d.id === 'dud').length;
+spin(dudRun);
+const dudAfter = dudRun.pool.filter((d) => d.id === 'dud').length;
+check(
+  'B 引擎',
+  '第 10 层起每 25 转注入 1 个 dud',
+  dudAfter === dudBefore + 1,
+  `${dudBefore} → ${dudAfter}`,
+);
+
+/* ── 房东信箱 + 同伴楼层缩放（原版 emails / comrade_values）── */
+
+const stairs = [1, 4, 9, 16].map((f) => comradeValues(f));
+check(
+  'B 引擎',
+  '同伴援助按楼层递减 [2,2,2]→[2,1,2]→[1,1,2]→[1,1,1]',
+  stairs[0].reroll === 2 &&
+    stairs[0].removal === 2 &&
+    stairs[0].essence === 2 &&
+    stairs[1].reroll === 2 &&
+    stairs[1].removal === 1 &&
+    stairs[2].essence === 2 &&
+    stairs[3].reroll === 1 &&
+    stairs[3].removal === 1 &&
+    stairs[3].essence === 1,
+  stairs.map((s) => `${s.reroll}/${s.removal}/${s.essence}`).join(' → '),
+);
+
+const opening = createGame(19);
+check(
+  'B 引擎',
+  '开局收到房东第一封信',
+  opening.mails.length === 1 && opening.mails[0].kind === 'intro' && !opening.mails[0].read,
+  opening.mails.map((m) => m.kind).join(','),
+);
+
+const comradeRun = createGame(23);
+comradeRun.coins = 100000;
+for (let i = 0; i < 3; i += 1) {
+  comradeRun.spinsLeft = 0;
+  payRent(comradeRun);
+}
+check(
+  'B 引擎',
+  '第 3 期同伴来信：三种代币按第 4 层档位入账',
+  comradeRun.rentPaid === 3 &&
+    comradeRun.rerollTokens === 2 &&
+    comradeRun.removalTokens === 1 &&
+    comradeRun.essenceTokens === 2 &&
+    comradeRun.mails.some((m) => m.kind === 'init_comrade_help'),
+  `tokens=${comradeRun.rerollTokens}/${comradeRun.removalTokens}/${comradeRun.essenceTokens} mails=${comradeRun.mails.map((m) => m.kind).join(',')}`,
+);
+
+comradeRun.spinsLeft = 0;
+payRent(comradeRun);
+comradeRun.spinsLeft = 0;
+payRent(comradeRun);
+check(
+  'B 引擎',
+  '信箱同类合并：comrade_help 只留一封',
+  comradeRun.mails.filter((m) => m.kind === 'comrade_help').length === 1,
+  comradeRun.mails.map((m) => m.kind).join(','),
+);
+
+const unreadBefore = unreadMails(comradeRun);
+markMailRead(comradeRun, comradeRun.mails[0].id);
+check(
+  'B 引擎',
+  '已读状态与未读计数',
+  unreadMails(comradeRun) === unreadBefore - 1 && comradeRun.mails[0].read,
+  `${unreadBefore} → ${unreadMails(comradeRun)}`,
+);
+
+const broke = createGame(24);
+broke.coins = 0;
+broke.spinsLeft = 0;
+payRent(broke);
+check(
+  'B 引擎',
+  '破产会收到退租信',
+  broke.over && broke.mails.some((m) => m.kind === 'game_over'),
+  broke.mails.map((m) => m.kind).join(','),
+);
+
+check(
+  'B 引擎',
+  '邮件里的道具名带原作英文名对照',
+  tagOf('chili_powder').includes('辣椒') && tagOf('chili_powder').includes('Chili Powder'),
+  tagOf('chili_powder'),
+);
+
+const sandbox = createGame(7, 'sandbox');
+check(
+  'B 引擎',
+  '沙盒从第 12 期起且金币管饱',
+  sandbox.rentPaid === 11 && sandbox.coins >= 999999 && sandbox.mode === 'sandbox',
+  `rentPaid=${sandbox.rentPaid} coins=${sandbox.coins}`,
+);
+
+const endless = createGame(8, 'endless');
+endless.rentPaid = 11;
+endless.payment = 11;
+endless.spinsLeft = 0;
+endless.coins = 1_000_000;
+payRent(endless);
+check(
+  'B 引擎',
+  '无尽模式付完 12 期不结束',
+  !endless.won && !endless.over && endless.rentPaid === 12,
+  `won=${endless.won} over=${endless.over} rentPaid=${endless.rentPaid}`,
+);
 
 /* ── C. 交互键位 ── */
 

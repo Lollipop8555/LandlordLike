@@ -11,6 +11,8 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- 提示条独立挂在 #app 之外：重绘对局不会打断/重播它们 -->
+    <div id="toast-host" class="toast-wrap" aria-live="polite"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

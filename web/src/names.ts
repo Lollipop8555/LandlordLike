@@ -365,6 +365,27 @@ export function symbolName(id: string): string {
     .join(' ');
 }
 
+/**
+ * 原作里这个 id 自带的英文名（chili_powder → Chili Powder）。
+ * 我们换过图标与中文名，邮件里用「中文名(英文名)」的形式标出对照关系。
+ */
+export function literalName(id: string): string {
+  const base = id.endsWith('_essence') ? id.slice(0, -'_essence'.length) : id;
+  const words = base
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+  return id.endsWith('_essence') ? `${words} Essence` : words;
+}
+
+/** 中文展示名 + 原作英文名：辣椒(Chili Powder) */
+export function bilingualName(id: string): string {
+  const cn = symbolName(id);
+  const en = literalName(id);
+  return cn === en ? cn : `${cn}(${en})`;
+}
+
 export function groupName(id: string): string {
   return GROUP_NAMES[id] ?? id;
 }

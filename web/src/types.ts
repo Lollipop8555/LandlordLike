@@ -2,6 +2,15 @@
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'very_rare';
 
+/** 游戏模式：普通 12 期 / 无尽 / 沙盒 */
+export type GameMode = 'normal' | 'endless' | 'sandbox';
+
+export const MODE_LABEL: Record<GameMode, string> = {
+  normal: '普通',
+  endless: '无尽',
+  sandbox: '沙盒',
+};
+
 export const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'rare', 'very_rare'];
 
 export const RARITY_LABEL: Record<Rarity, string> = {

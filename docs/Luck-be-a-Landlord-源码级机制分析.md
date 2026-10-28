@@ -446,7 +446,7 @@ essence_tokens        ← 0                   （立即清零）
 | ≥ 4 | `[2, 1, 2]` |
 | 其他 | `[2, 2, 2]` |
 
-控制"同伴类"符号（`doglikes` / `beelikes` 等）的生成数量。
+这组数字**不是**符号生成上限，而是「同伴来信」（`comrade_help` / `init_comrade_help`）随信赠予的三种代币数量：`reroll_tokens += v[0]`、`removal_tokens += v[1]`、`essence_tokens += v[2]`（`Pop-up__Pop-up.gd:3400-3415`，对应 `Extra_Sum.add_value(v0, v1, v2)`）。发放时机是付租后的 `rent_increase`：第 3 期首封，之后每逢奇数期一封（`Pop-up__Pop-up.gd:2925-2945`）。因此楼层越高，同伴援助越少，这是「代币供应」型的难度缩放。
 
 ### 8.3 37 条 Fine Print（A，`data/fine_print.csv`）
 

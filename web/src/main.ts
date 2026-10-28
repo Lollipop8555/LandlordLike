@@ -1,8 +1,25 @@
 import './styles.css';
-import { buyFromShop, closeShop, createGame, payRent, spin } from './engine';
+import {
+  buyFromShop,
+  closeShop,
+  createGame,
+  essenceUpgrade,
+  markAllMailsRead,
+  markMailRead,
+  payRent,
+  removeSymbolAt,
+  rerollShop,
+  spin,
+  startBossFight,
+  type GameState,
+} from './engine';
 import { fillerEmoji, fitBoard, renderGame, type GameUi } from './game';
+import { checkAchievements, type AchEvent } from './progress/achievements';
+import { loadProfile, recordRun, resetProfile, saveProfile, type Profile } from './progress/save';
+import { renderAchievementsPanel, renderStatsPanel, renderTitle, renderToast } from './screens';
 import { emojiOf } from './sprites';
 import { runSelfChecks, summarize } from './selfcheck';
+import type { GameMode } from './types';
 import {
   renderAbout,
   renderChecks,
@@ -17,8 +34,27 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 const results = runSelfChecks();
 const summary = summarize(results);
 
-let game = createGame();
-const ui: GameUi = { animating: false, detail: null, peek: null };
+/* ── 全局状态 ── */
+
+type Screen = 'title' | 'game';
+type Panel = 'achievements' | 'stats' | null;
+
+let screen: Screen = 'title';
+let panel: Panel = null;
+let mode: GameMode = loadProfile().lastMode;
+let profile: Profile = loadProfile();
+let game: GameState = createGame(Date.now() % 100000, mode);
+const ui: GameUi = {
+  animating: false,
+  detail: null,
+  peek: null,
+  itemDetail: null,
+  removing: false,
+  deck: false,
+  mailbox: false,
+  mailOpen: null,
+  confirmHome: false,
+};
 let analysisOpen = false;
 let analysisTab = 'formula';
 let formula: FormulaState = {
@@ -31,6 +67,59 @@ let formula: FormulaState = {
   negativeCase: false,
 };
 let dist: DistState = { S: 40, trials: 20000 };
+
+/** 本局是否已写入存档，避免重复计数 */
+let runRecorded = false;
+
+interface Toast {
+  icon: string;
+  title: string;
+  text: string;
+}
+
+/* ── 成就与存档 ── */
+
+/**
+ * 提示条挂在 #app 之外的常驻容器里，只做局部插入/移除。
+ * 早前每次都整页 paint()，会把已弹出的道具选择框重建、入场动画重播一遍。
+ */
+function pushToast(t: Toast): void {
+  const host = document.getElementById('toast-host');
+  if (!host) return;
+  // 顶部只留最近两条，避免整排提示把 HUD 遮死
+  while (host.childElementCount >= 2) host.firstElementChild?.remove();
+  host.insertAdjacentHTML('beforeend', renderToast(t));
+  const el = host.lastElementChild as HTMLElement | null;
+  if (!el) return;
+  setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 240);
+  }, 3400);
+}
+
+function afterEvent(ev: AchEvent): void {
+  const fresh = checkAchievements(profile, game, ev);
+  if (fresh.length === 0) return;
+  saveProfile(profile);
+  for (const a of fresh) pushToast({ icon: a.icon, title: `成就解锁 · ${a.name}`, text: a.desc });
+}
+
+function finishRun(): void {
+  const ended = game.over || game.won;
+  if (runRecorded || !ended) return;
+  runRecorded = true;
+  const bossWin = Boolean(game.boss && !game.boss.active && game.won);
+  recordRun(profile, {
+    won: game.won,
+    bossWin,
+    payment: game.rentPaid,
+    earned: game.totalEarned,
+    mode: game.mode,
+    spins: game.totalSpins,
+    buys: game.buys,
+  });
+  afterEvent({ t: 'end', won: game.won });
+}
 
 /* ── 分析抽屉 ── */
 
@@ -88,12 +177,18 @@ function renderAnalysis(): string {
 function paint(coinFrom?: number): void {
   app.innerHTML = `
     <div class="app">
-      <button class="corner-btn" data-action="open-analysis" title="机制分析" aria-label="机制分析">📊</button>
-      ${renderGame(game, ui)}
+      ${
+        screen === 'title'
+          ? `<button class="corner-btn" data-action="open-analysis" title="机制分析" aria-label="机制分析">📊</button>`
+          : ''
+      }
+      ${screen === 'title' ? renderTitle(profile, mode) : renderGame(game, ui)}
+      ${panel === 'achievements' ? renderAchievementsPanel(profile) : ''}
+      ${panel === 'stats' ? renderStatsPanel(profile) : ''}
       ${renderAnalysis()}
     </div>`;
   fitBoard();
-  if (coinFrom !== undefined) countUp(coinFrom, game.coins);
+  if (coinFrom !== undefined && screen === 'game') countUp(coinFrom, game.coins);
 }
 
 function countUp(from: number, to: number): void {
@@ -159,25 +254,121 @@ function animateReels(): Promise<void> {
 }
 
 async function doSpin(): Promise<void> {
-  if (ui.animating || game.over || game.shopOpen || game.spinsLeft <= 0) return;
+  if (ui.animating || game.over || game.won || game.shopOpen || game.spinsLeft <= 0) return;
   ui.animating = true;
+  ui.removing = false;
   const from = game.coins;
+  const destroyedBefore = game.destroyed;
+  const mailBefore = game.mails[0]?.id;
   spin(game);
+  const destroyedNow = game.destroyed - destroyedBefore;
+  const negative = game.cells.filter((c) => c.def && c.def.value < 0).length;
   await animateReels();
   await new Promise((r) => setTimeout(r, 280));
   ui.animating = false;
   paint(from);
+  mailHint(mailBefore);
+  afterEvent({ t: 'spin', output: game.lastSpinOutput, destroyed: destroyedNow, negative });
+  saveProfile(profile);
+}
+
+/** 新信只弹一条顶栏提示，不自动开面板（避免挡住商店/棋盘） */
+function mailHint(prevTopId: string | undefined): void {
+  const top = game.mails[0];
+  if (top && top.id !== prevTopId && !top.read) {
+    pushToast({ icon: '📬', title: `新信件：${top.subject}`, text: '点顶部 📬 收信' });
+  }
 }
 
 function doPay(): void {
   if (ui.animating) return;
+  ui.removing = false;
+  const bossFight = Boolean(game.boss?.active);
+  const damageBefore = game.boss ? game.boss.maxHp - game.boss.hp : 0;
+  const mailBefore = game.mails[0]?.id;
   const res = payRent(game);
   paint();
-  if (!res.ok) setTimeout(() => window.alert(res.message), 30);
+  mailHint(mailBefore);
+  if (!res.ok && !game.over) {
+    pushToast({ icon: '⚠️', title: '付租失败', text: res.message });
+    return;
+  }
+  if (bossFight && game.boss) {
+    const dealt = game.boss.maxHp - game.boss.hp - damageBefore;
+    afterEvent({ t: 'boss', damage: dealt });
+  } else {
+    afterEvent({ t: 'rent', paid: game.rentPaid });
+  }
+  finishRun();
+}
+
+function startRun(): void {
+  game = createGame(Date.now() % 100000, mode);
+  analysisOpen = false;
+  ui.detail = null;
+  ui.peek = null;
+  ui.itemDetail = null;
+  ui.removing = false;
+  ui.deck = false;
+  ui.mailbox = false;
+  ui.mailOpen = null;
+  ui.confirmHome = false;
+  runRecorded = false;
+  screen = 'game';
+  profile.lastMode = mode;
+  profile.stats.runs += 1;
+  saveProfile(profile);
+  paint();
 }
 
 function handleAction(action: string, el: HTMLElement, event: Event): void {
   switch (action) {
+    case 'pick-mode':
+      mode = (el.dataset.mode as GameMode) ?? 'normal';
+      break;
+    case 'start':
+      startRun();
+      return;
+    case 'home':
+      // 未打完的对局不计入统计，误触就是白丢一局，先确认
+      if (game.over || game.won) {
+        finishRun();
+        analysisOpen = false;
+        screen = 'title';
+      } else {
+        ui.confirmHome = true;
+      }
+      break;
+    case 'home-yes':
+      ui.confirmHome = false;
+      finishRun();
+      analysisOpen = false;
+      screen = 'title';
+      break;
+    case 'home-no':
+      ui.confirmHome = false;
+      break;
+    case 'boss':
+      startBossFight(game);
+      afterEvent({ t: 'boss', damage: 0 });
+      break;
+    case 'open-achievements':
+      panel = 'achievements';
+      break;
+    case 'open-stats':
+      panel = 'stats';
+      break;
+    case 'close-panel': {
+      // 点面板内部不关闭；右上角 ✕ 与遮罩可以关
+      const t = event.target as HTMLElement;
+      if (t.closest('.sheet') && !t.closest('.icon-btn')) return;
+      panel = null;
+      break;
+    }
+    case 'reset-profile':
+      if (!window.confirm('清空所有统计与成就？')) return;
+      profile = resetProfile();
+      break;
     case 'spin':
       void doSpin();
       return;
@@ -185,38 +376,113 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       void doPay();
       return;
     case 'reset':
-      game = createGame();
-      ui.detail = null;
-      ui.peek = null;
-      break;
+      finishRun();
+      startRun();
+      return;
     case 'buy': {
       const idx = Number(el.dataset.index);
       buyFromShop(game, idx);
       closeShop(game);
       ui.peek = null;
+      afterEvent({ t: 'buy', stacks: game.items.length });
       break;
     }
     case 'skip':
       closeShop(game);
       ui.peek = null;
       break;
+    case 'reroll': {
+      const res = rerollShop(game);
+      if (!res.ok) pushToast({ icon: '⚠️', title: '无法重掷', text: res.message });
+      else pushToast({ icon: '♻️', title: '商店已重掷', text: `剩 ${game.rerollTokens} 重掷代币` });
+      ui.peek = null;
+      break;
+    }
+    case 'removal-mode':
+      if (!ui.removing && game.removalTokens < game.removalCost) {
+        pushToast({ icon: '⚠️', title: '移除代币不足', text: `需要 ${game.removalCost} 个移除代币` });
+        return;
+      }
+      ui.removing = !ui.removing;
+      break;
+    case 'remove': {
+      const res = removeSymbolAt(game, Number(el.dataset.index));
+      pushToast({
+        icon: res.ok ? '🗑️' : '⚠️',
+        title: res.ok ? '已移除' : '无法移除',
+        text: res.message,
+      });
+      if (game.removalTokens < game.removalCost) ui.removing = false;
+      break;
+    }
+    case 'essence': {
+      const id = el.dataset.id ?? '';
+      const res = essenceUpgrade(game, id);
+      pushToast({
+        icon: res.ok ? '💎' : '⚠️',
+        title: res.ok ? '精华升级' : '无法升级',
+        text: res.message,
+      });
+      if (res.ok) ui.itemDetail = `${id}_essence`;
+      break;
+    }
+    case 'deck':
+      ui.deck = true;
+      break;
+    case 'close-deck':
+      if ((event.target as HTMLElement).closest('[data-stop]') && !(event.target as HTMLElement).closest('.ghost-btn')) return;
+      ui.deck = false;
+      break;
+    case 'mailbox':
+      ui.mailbox = true;
+      break;
+    case 'close-mail': {
+      // 点面板内容不关闭；右上角 ✕ 与遮罩可以关
+      const t = event.target as HTMLElement;
+      if (t.closest('[data-stop]') && !t.closest('.icon-btn') && !t.closest('.ghost-btn')) return;
+      ui.mailbox = false;
+      ui.mailOpen = null;
+      break;
+    }
+    case 'mail-open': {
+      const id = el.dataset.id ?? '';
+      ui.mailOpen = ui.mailOpen === id ? null : id;
+      if (ui.mailOpen) markMailRead(game, id);
+      break;
+    }
+    case 'mail-all':
+      markAllMailsRead(game);
+      break;
     case 'peek':
       ui.peek = Number(el.dataset.index);
       break;
-    case 'close-peek':
-      if ((event.target as HTMLElement).closest('[data-stop]')) return;
+    case 'close-peek': {
+      const t = event.target as HTMLElement;
+      if (t.closest('[data-stop]') && !t.closest('.icon-btn')) return;
       ui.peek = null;
       break;
+    }
     case 'inspect': {
       const target = event.target as HTMLElement;
       if (target.closest('.float')) return;
       ui.detail = Number(el.dataset.index);
       break;
     }
-    case 'close-detail':
-      if ((event.target as HTMLElement).closest('[data-stop]')) return;
+    case 'close-detail': {
+      const t = event.target as HTMLElement;
+      if (t.closest('[data-stop]') && !t.closest('.icon-btn')) return;
       ui.detail = null;
       break;
+    }
+    case 'inspect-item':
+      ui.itemDetail = el.dataset.id ?? null;
+      break;
+    case 'close-item': {
+      const t = event.target as HTMLElement;
+      if (t.closest('[data-stop]') && !t.closest('.icon-btn')) return;
+      ui.itemDetail = null;
+      break;
+    }
     case 'open-analysis':
       analysisOpen = true;
       break;
@@ -259,6 +525,48 @@ document.addEventListener('click', (event) => {
   const el = target?.closest<HTMLElement>('[data-action]');
   if (!el) return;
   handleAction(el.dataset.action ?? '', el, event);
+});
+
+// 快捷键：Esc 退回一层（移除模式 → 信箱 → 牌库 → 分析/成就/统计 → 详情面板）
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (ui.confirmHome) {
+    ui.confirmHome = false;
+    paint();
+    return;
+  }
+  if (ui.removing) {
+    ui.removing = false;
+    paint();
+    return;
+  }
+  if (ui.mailbox) {
+    if (ui.mailOpen) ui.mailOpen = null;
+    else ui.mailbox = false;
+    paint();
+    return;
+  }
+  if (ui.deck) {
+    ui.deck = false;
+    paint();
+    return;
+  }
+  if (analysisOpen) {
+    analysisOpen = false;
+    paint();
+    return;
+  }
+  if (panel) {
+    panel = null;
+    paint();
+    return;
+  }
+  if (ui.itemDetail || ui.detail !== null || ui.peek !== null) {
+    ui.itemDetail = null;
+    ui.detail = null;
+    ui.peek = null;
+    paint();
+  }
 });
 
 document.addEventListener('change', (event) => {
