@@ -559,6 +559,17 @@ function isSupportedPred(c: EffectComparison): boolean {
   return c.a === null && typeof (c as unknown as Record<string, unknown>).dynamic_a_key === 'string';
 }
 
+/**
+ * 条件里的取值方是否指向「发声明的那一个」。
+ * 源码用 `value_target_override: self` / `dynamic_a_target: self` 把读数从
+ * 被作用的符号换成道具自己——莫比乌斯环的「50% 概率」与「已补回次数 < 7」
+ * 都是它自己的参数，读成受害者符号的 values 就会变成别的数。
+ */
+function targetsSelf(spec: unknown): boolean {
+  if (spec === 'self') return true;
+  return typeof spec === 'object' && spec !== null && (spec as Record<string, unknown>).$dyn === 'self';
+}
+
 function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx = {}): boolean {
   // b 为 null 时由 dynamic_b_key 指定「另一个符号的哪个槽位」，如 black_pepper 比较双方 value
   const raw = comp as unknown as Record<string, unknown>;
@@ -579,7 +590,10 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
   if (comp.a === null && typeof raw.dynamic_a_key === 'string') {
     if (b === null) return false;
     const key = raw.dynamic_a_key;
-    const actual = ctx.globalSlot?.(key) ?? readSlot(other, key) ?? 0;
+    // dynamic_a_target: self → 读发声明者自己的槽位（saved_value），不是受害者的
+    const actual = targetsSelf(raw.dynamic_a_target)
+      ? (readSlot(self, key) ?? 0)
+      : (ctx.globalSlot?.(key) ?? readSlot(other, key) ?? 0);
     if (typeof actual === 'boolean') return actual === Boolean(b);
     return cmpNum(comp, Number(actual), Number(b));
   }
@@ -591,11 +605,14 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
   // 求值时按随机阈值处理，所以放在 b 是否为 null 的检查之前。
   if (raw.rand) {
     const threshold = (ctx.chanceRoll?.() ?? 0.5) * 100;
+    // value_target_override: self → 概率取自道具自己的 values（莫比乌斯环 50%），
+    // 而不是被摧毁的那个符号的数值。
+    const source = targetsSelf(raw.value_target_override) ? self : other;
     if (a === 'values') {
       const slot = Number(comp.value_num ?? 0);
-      return (other.def?.values[slot] ?? 0) + (other.valueBonus ?? 0) >= threshold;
+      return (source.def?.values[slot] ?? 0) + (source.valueBonus ?? 0) >= threshold;
     }
-    if (a === 'value_bonus') return (other.valueBonus ?? 0) >= threshold;
+    if (a === 'value_bonus') return (source.valueBonus ?? 0) >= threshold;
     return false;
   }
 
@@ -1346,6 +1363,44 @@ export function effectCoverage(): EffectCoverage {
 }
 
 /** 符号的全部声明（拆解面板用） */
+/**
+ * 反向索引：哪些符号的声明把这个道具当作前置条件（when:item:X / no_item:X）。
+ *
+ * 有些道具自身没有任何声明（幸运猫、第五张 A、扎罗夫的契约），功能全部体现在
+ * 别的符号的声明里；只按自身声明渲染，卡片就会显示「无特效」，这是错的。
+ */
+export function itemGateNotes(id: string): Array<{ owner: string; text: string }> {
+  const out: Array<{ owner: string; text: string }> = [];
+  const seen = new Set<string>();
+  for (const rule of EFFECTS) {
+    if (rule.symbol === id) continue;
+    const hit = gatesOf(rule).some(
+      (g) => (g.kind === 'item' || g.kind === 'no_item') && g.keys.includes(id),
+    );
+    if (!hit) continue;
+    const text = describeRule(rule);
+    if (!text) continue;
+    const key = `${rule.symbol}|${text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ owner: rule.symbol, text });
+  }
+  // 同一 owner 的连续多档稀有度上调合并成一条（幸运猫：罕见 / 稀有 / 极稀有）
+  const TIER = /^(.*稀有度提到)「(.+)」$/;
+  const merged: Array<{ owner: string; text: string }> = [];
+  for (const note of out) {
+    const m = TIER.exec(note.text);
+    const prev = merged[merged.length - 1];
+    const pm = prev && prev.owner === note.owner ? TIER.exec(prev.text) : null;
+    if (m && pm) {
+      merged[merged.length - 1] = { owner: prev.owner, text: `${pm[1]}「${pm[2]} / ${m[2]}」` };
+      continue;
+    }
+    merged.push(note);
+  }
+  return merged;
+}
+
 export function rulesOf(id: string): EffectRule[] {
   return EFFECTS_BY_SYMBOL.get(id) ?? [];
 }
@@ -1374,6 +1429,8 @@ export interface ItemHolder {
   count: number;
   /** 道具自身的 value 槽位（Item__Item.gd 的 `value`），细则 17 会按持有数量扣减 */
   value?: number;
+  /** saved_value：跨轮累计（莫比乌斯环记「已经补回几次」，达到上限就停手） */
+  savedValue?: number;
 }
 
 const MULTIPLY_VTC = new Set(['value_multiplier', 'permanent_multiplier']);
@@ -1391,6 +1448,20 @@ function countOf(items: ItemHolder[], id: string): number {
  * 同类道具叠加时 diff 按 item_count 放大（源码闭包里做 effect.diff *= item_count），
  * 倍率类按幂放大，避免线性和把 ×2 ×2 算成 +2。
  */
+/**
+ * 道具侧的生成声明：把占位符解成具体符号再交给引擎。
+ * `current_type` 指「刚刚被摧毁的那个符号」，莫比乌斯环据此把它原样补回棋盘。
+ */
+function fireItemSpawn(rule: EffectRule, victim: Cell, holder: Cell, ctx: EvalCtx): void {
+  if (!ctx.spawn) return;
+  for (const spec of rule.spawn ?? []) {
+    const type = spec.type === 'current_type' ? victim.def?.id : spec.type;
+    const amount = evalValue(spec.count as EffectValue, holder);
+    const count = Math.max(0, Math.round(Number(amount ?? 1)));
+    for (let i = 0; i < count; i += 1) ctx.spawn({ ...spec, type, count: 1 }, holder);
+  }
+}
+
 export function applyItemEffects(
   items: ItemHolder[],
   cells: Cell[],
@@ -1404,7 +1475,8 @@ export function applyItemEffects(
 
   for (const held of items) {
     if (!held.def || held.count <= 0) continue;
-    const holder = { def: held.def } as Cell;
+    // item_count 读叠层数（祭坛每层产一个灵魂）；saved_value 是跨轮累计（莫比乌斯环）
+    const holder = { def: held.def, itemCount: held.count, savedValue: held.savedValue ?? 0 } as Cell;
     for (const rule of EFFECTS_BY_SYMBOL.get(held.def.id) ?? []) {
       if (rule.kind !== 'cond') continue;
       // 源码用 if/elif 按「持有别的道具 / 细则」分档，条件不成立的分支不结算
@@ -1412,17 +1484,20 @@ export function applyItemEffects(
         skipped += 1;
         continue;
       }
-      if (!SUPPORTED_VTC.has(rule.vtc)) {
+      // 纯生成声明（祭坛→灵魂、煎锅→煎蛋）：没有 value_to_change，条件成立就往空格塞符号。
+      // 这类声明以前被 SUPPORTED_VTC 挡掉，数据里存在但从不生效。
+      const spawnOnly = !rule.vtc && rule.diff === null && (rule.spawn?.length ?? 0) > 0;
+      if (!spawnOnly && !SUPPORTED_VTC.has(rule.vtc)) {
         skipped += 1;
         continue;
       }
-      if (rule.comparisons.some((c) => !SUPPORTED_PRED.has(c.a))) {
+      if (rule.comparisons.some((c) => !isSupportedPred(c))) {
         skipped += 1;
         continue;
       }
-      const base = evalValue(rule.diff, holder);
+      const base = spawnOnly ? 0 : evalValue(rule.diff, holder);
       // 变形声明（洒水壶）没有 diff，目标由 group/min_rarity 选
-      if (base === null && rule.vtc !== 'type') {
+      if (!spawnOnly && base === null && rule.vtc !== 'type') {
         skipped += 1;
         continue;
       }
@@ -1444,13 +1519,30 @@ export function applyItemEffects(
 
       let hit = 0;
       for (const target of cells) {
-        if (!target.def || target.destroyed) continue;
+        if (!target.def) continue;
+        // 生成声明要等的正是「刚被摧毁的那个符号」（莫比乌斯环、祭坛），
+        // 其余声明照旧只作用于活着的格子
+        if (target.destroyed && !spawnOnly) continue;
         if (!rule.comparisons.every((c) => matchOne(c, target, holder, ctx))) continue;
-        applyTo(target, useRule, diff, ctx);
+        // 同一转里销毁会迭代多轮，道具声明也跟着重跑，没有这层去重会重复加成
+        const memo = (target.appliedItems ??= new Set<string>());
+        const key = `${held.def.id}#${rule.line}`;
+        if (memo.has(key)) continue;
+        memo.add(key);
+        if (spawnOnly) fireItemSpawn(rule, target, holder, ctx);
+        else applyTo(target, useRule, diff, ctx);
         hit += 1;
       }
       if (hit > 0) {
         applied += hit;
+        // item_to_add_saved_value：这条声明成立时给指定道具攒一次（莫比乌斯环的上限计数）
+        for (const flag of rule.flags) {
+          if (!flag.startsWith('savedadd:')) continue;
+          const id = flag.slice('savedadd:'.length);
+          for (const it of items) {
+            if (it.def.id === id) it.savedValue = (it.savedValue ?? 0) + 1;
+          }
+        }
         for (const id of consumeOf(rule)) {
           if (!consumed.includes(id)) consumed.push(id);
         }
@@ -1572,18 +1664,18 @@ function dynText(expr: string, owner?: Owner): string {
     const n = m[1] ? at(m[1]) : SYMBOL_BY_ID.get(m[2])?.values[Number(m[3])] ?? null;
     return n === null ? `每场上有一个${symbolName(m[4])}就加一次` : `每场上有一个${symbolName(m[4])} +${numText(n)}`;
   }
-  if (/counted_symbols\["([a-z0-9_]+)"\]/.test(e)) return '按场上的符号数量放大';
+  if ((m = e.match(/counted_symbols\["([a-z0-9_]+)"\]/))) return `每有一个${symbolName(m[1])}就加一次`;
   if ((m = e.match(/^int\(values\[(\d+)\]\)$/))) {
     const n = at(m[1]);
-    return n === null ? '自身面板上的数值' : String(Math.floor(n));
+    return n === null ? '本符号数值（面板值）' : String(Math.floor(n));
   }
   if ((m = e.match(/^values\[(\d+)\] - 1$/))) {
     const n = at(m[1]);
-    return n === null ? '自身面板上的数值减一' : numText(n - 1);
+    return n === null ? '本符号数值（面板值）减一' : numText(n - 1);
   }
   if ((m = e.match(/^values\[(\d+)\] \+ 1$/))) {
     const n = at(m[1]);
-    return n === null ? '自身面板上的数值加一' : numText(n + 1);
+    return n === null ? '本符号数值（面板值）加一' : numText(n + 1);
   }
   if ((m = e.match(/^-values\[(\d+)\]$/))) {
     const n = at(m[1]);
@@ -1591,7 +1683,7 @@ function dynText(expr: string, owner?: Owner): string {
   }
   if ((m = e.match(/^values\[(\d+)\]$/))) {
     const n = at(m[1]);
-    return n === null ? '自身面板上的数值' : numText(n);
+    return n === null ? '本符号数值（面板值）' : numText(n);
   }
   // 引用另一个符号的面板数值：d3.values[1]
   if ((m = e.match(/^([a-z0-9_]+)\.values\[(\d+)\]$/))) {
@@ -1615,12 +1707,16 @@ function fmtValue(v: EffectValue, owner?: Owner): string {
   if ('$ref_value' in o) return `${symbolName(String(o.$ref_value))} 的数值`;
   if ('$self_index' in o) {
     const n = ownerNum(owner, Number(o.$self_index));
-    return n === null ? '自身面板上的数值' : numText(n);
+    return n === null ? '本符号数值（面板值）' : numText(n);
   }
   if ('$self_value' in o) return '本符号的数值';
   if ('$adj_count' in o) return '相邻格数';
   if ('$fp' in o) return '细则数值';
-  if ('counted_symbols' in o) return '被统计的符号数';
+  if ('counted_symbols' in o) {
+    const k = o.counted_symbols as unknown;
+    // 具体符号名优先（{\"counted_symbols\":\"cultist\"}），动态类型退回泛称
+    return typeof k === 'string' ? `场上${symbolName(k)}数` : '场上同类符号数';
+  }
   return '随局面变化';
 }
 
@@ -1642,7 +1738,15 @@ interface Cond {
 function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
   const out: Cond = { extras: [], onlyType: true, luck: false };
   for (const cmp of rule.comparisons) {
-    const key = typeof cmp.a === 'string' ? cmp.a : '';
+    // a 可能是 {"counted_symbols":"cultist"} 这类对象谓词，先归一到谓词名；
+    // null + dynamic_a_key 的写法描述期无从称呼，跳过（执行期照常生效）
+    const a = cmp.a as unknown;
+    const key =
+      typeof a === 'string'
+        ? a
+        : typeof a === 'object' && a !== null && 'counted_symbols' in a
+          ? 'counted_symbols'
+          : '';
     if (!key) continue;
     if (key === 'type') {
       // 作用在邻格时，类型条件说的是邻居（螃蟹看旁边的螃蟹）；
@@ -1652,6 +1756,19 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
     }
     if (key === 'groups' && typeof cmp.b === 'string') {
       out.groupLabel = groupName(cmp.b);
+      continue;
+    }
+    // 场上某符号的个数达到阈值（邪教徒、钻石、西瓜、忍者这类「同类聚集」判定）
+    if (key === 'counted_symbols') {
+      const who = (a as { counted_symbols?: unknown }).counted_symbols;
+      const label = typeof who === 'string' ? symbolName(who) : '同类符号';
+      const n = fmtValue(cmp.b as EffectValue, owner);
+      out.onlyType = false;
+      if (cmp.greater_than !== undefined) out.extras.push(n === '0' ? `场上有${label}` : `场上有超过 ${n} 个${label}`);
+      else if (cmp.greater_than_eq) out.extras.push(`场上有 ${n} 个以上${label}`);
+      else if (cmp.less_than !== undefined) out.extras.push(`场上不到 ${n} 个${label}`);
+      else if (cmp.less_than_eq) out.extras.push(`场上至多 ${n} 个${label}`);
+      else out.extras.push(`场上正好 ${n} 个${label}`);
       continue;
     }
     // tbd 是「已判定要摧毁、等本转走完」的内部标记，玩家不需要看到
@@ -1771,10 +1888,23 @@ function timesText(unit: string, d: string): string {
   return isNumeric(d) ? `${unit} ×${d}` : `${unit} ×（${d}）`;
 }
 
+/** 计数型数值加成：diff 直接就是「场上某符号的个数」 */
+const COUNTED_BONUS_VTC = new Set(['value_bonus', 'value', 'bonus_values']);
+
+function countedBonusOwner(rule: EffectRule): string | null {
+  if (!COUNTED_BONUS_VTC.has(rule.vtc)) return null;
+  if (rule.flags.includes('overwrite')) return null;
+  const d = rule.diff as unknown;
+  if (!d || typeof d !== 'object') return null;
+  const k = (d as { counted_symbols?: unknown }).counted_symbols;
+  return typeof k === 'string' ? k : null;
+}
+
 /** 效果本身，返回「值型」或「动作型」两种句块 */
 function effectText(rule: EffectRule, owner?: Owner): string {
   const vtc = rule.vtc;
-  if (RARITY_KEYS.has(vtc)) return '';
+  // 稀有度上调本身没有数值，写成句子而不是留空：幸运猫这类道具全靠它起作用
+  if (RARITY_KEYS.has(vtc)) return `稀有度提到「${RARITY_LABEL[vtc as Rarity] ?? vtc}」`;
   if (vtc === 'type') {
     if (typeof rule.diff === 'string') return `变成${symbolName(rule.diff)}`;
     // diff 为空时靠 flags 从某个组里按稀有度随机挑（种子长成植物的写法）
@@ -1800,7 +1930,16 @@ function effectText(rule: EffectRule, owner?: Owner): string {
   // diff 由「被作用符号的某个槽位 × 系数」在运行时算出（矮人吃了亲矮人拿它的数值）
   if (rule.diff === null && rule.flags.some((f) => f.startsWith('diffkey:'))) {
     const key = rule.flags.find((f) => f.startsWith('diffkey:'))!.slice('diffkey:'.length);
-    const what = key === 'value' || key === 'non_prev_final_value' ? '被摧毁符号的数值' : '目标的相关数值';
+    const SLOT: Record<string, string> = {
+      value: '数值',
+      non_prev_final_value: '数值',
+      saved_value: '积累',
+      bonus_values: '额外数值',
+      value_multiplier: '本轮倍率',
+      permanent_multiplier: '永久倍率',
+      item_value: '数值',
+    };
+    const what = `被摧毁符号的${SLOT[key] ?? '对应数值'}`;
     switch (vtc) {
       case 'value':
         return `数值变为${what}`;
@@ -1827,6 +1966,21 @@ function effectText(rule: EffectRule, owner?: Owner): string {
       return rule.flags.includes('overwrite') ? `数值变为 ${d}` : unitText('数值', d);
     case 'permanent_bonus':
       return d ? unitText('永久', d) : '永久上升';
+    case 'permanent_bonuses': {
+      // {type|groups, bonus|multiplier}：给一整类符号挂永久加成（精华消耗时结算）。
+      // 以前这里落到 default 返回空串，42 条精华的收益因此完全看不见。
+      const spec = (rule.diff ?? {}) as Record<string, unknown>;
+      const who =
+        typeof spec.groups === 'string'
+          ? `${groupName(spec.groups)}符号`
+          : typeof spec.type === 'string'
+            ? symbolName(spec.type)
+            : '符号';
+      const mul = fmtValue(spec.multiplier as EffectValue, owner);
+      if (mul) return `所有${who} ×${mul}`;
+      const add = fmtValue(spec.bonus as EffectValue, owner);
+      return add ? `所有${who} +${add}` : `所有${who}永久提升`;
+    }
     case 'value_multiplier':
       return d ? timesText('本轮倍率', d) : '本轮倍率上升';
     case 'permanent_multiplier':
@@ -1884,7 +2038,12 @@ export function describeRule(rule: EffectRule, owner?: Owner): string {
   // tiles_to_add 的语义是「往棋盘里塞一个新符号」，和数值改动可以同时存在
   // （蜂巢值 +1 的同时产蜜），所以两条文案拼在一起，而不是互相覆盖。
   const spawn = spawnTextOf(rule);
-  const core = body && spawn ? `${body}，并${spawn}` : body || spawn;
+  const core =
+    body && spawn
+      ? body.endsWith('，')
+        ? `${body}${spawn}`
+        : `${body}，并${spawn}`
+      : body || spawn;
   if (!core) return '';
   const gate = gateText(rule);
   const eat = consumeText(rule);
@@ -1964,7 +2123,28 @@ export function describeFinePrint(fp: FinePrintState): string[] {
 }
 
 function describeRuleBody(rule: EffectRule, owner?: Owner): string {
+  // 只有 tiles_to_add 的声明（煎锅：蛋被摧毁时生成煎蛋）：句子的后半截是「生成 X」，
+  // 由 describeRule 拼，这里只负责条件前缀，并以逗号收尾。
+  // 必须排在 SILENT_VTC 之前：空 vtc 在静默表里，否则整句会被当成无声明吞掉
+  if (!rule.vtc && rule.diff === null && (rule.spawn?.length ?? 0) > 0) {
+    const c = readCond(rule, owner, rule.flags.includes('target:adjacent'));
+    const gate = gateText(rule);
+    const noun = c.typeName ?? (c.groupLabel ? `${c.groupLabel}符号` : '');
+    const state = c.destroyed === undefined ? '' : c.destroyed ? '被摧毁的' : '完好的';
+    const pre = [gate ? `${gate}时` : '', noun ? `每有一个${state}${noun}` : '']
+      .filter(Boolean)
+      .join('，');
+    return pre ? `${pre}，` : '';
+  }
   if (SILENT_VTC.has(rule.vtc)) return '';
+  // 「数值 + 场上某符号个数」是计数型加成（邪教徒、钻石、西瓜），等价于每个 +1：
+  // 写成「每有一个」比「+ 场上X数量」直白，也免得读者自己去做乘法
+  const counted = countedBonusOwner(rule);
+  if (counted) {
+    const gate = gateText(rule);
+    const line = `场上每有一个${symbolName(counted)}，本符号数值 +1`;
+    return gate ? `${gate}时，${line}` : line;
+  }
   const eff = effectText(rule, owner);
   if (!eff) return '';
   const adjacent = rule.flags.includes('target:adjacent');
@@ -2043,7 +2223,17 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
     return odds ? `${cond}时，${odds}${verb}` : `${cond}时，${verb}`;
   }
   // 值型：条件在前，概率修饰主句的谓语（条件已在说本符号时不再重复主语）
-  const subject = onTarget ? `${targetNoun}的${eff}` : cond.startsWith('本符号') ? eff : `本符号${eff}`;
+  // kind=cond 是「对每个命中条件的符号各结算一次」，值型要写「每个 X」而不是「X」
+  const each = onTarget && targetNoun !== '目标' ? '每个' : '';
+  // 空位不是符号、自身没有数值，命中空位时加成只能落在本符号身上（柠檬）
+  const onSelf = targetNoun === '空位';
+  const subject = onTarget
+    ? onSelf
+      ? `${each}${targetNoun}，本符号${eff}`
+      : `${each}${targetNoun}的${eff}`
+    : cond.startsWith('本符号')
+      ? eff
+      : `本符号${eff}`;
   const main = odds ? `${odds}让${subject}` : subject;
   // 正文已经点名作用对象时，不再重复「场上有 X 时」
   if (onTarget && plainCond && main.includes(targetNoun)) return main;

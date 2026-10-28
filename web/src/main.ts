@@ -1,16 +1,18 @@
 import './styles.css';
 import {
+  beginSpin,
   buyFromShop,
   closeShop,
   createGame,
   essenceUpgrade,
   markAllMailsRead,
   markMailRead,
-  moveSymbol,
   payRent,
   removeSymbolAt,
   rerollShop,
-  spin,
+  resolveSpin,
+  skipSwap,
+  swapSymbols,
   type GameState,
 } from './engine';
 import { fillerEmoji, fitBoard, renderGame, type GameUi } from './game';
@@ -58,7 +60,7 @@ const ui: GameUi = {
   mailbox: false,
   mailOpen: null,
   confirmHome: false,
-  holding: null,
+  swapFrom: null,
   settingsOpen: false,
 };
 
@@ -313,22 +315,61 @@ function animateReels(): Promise<void> {
   return Promise.all(jobs).then(() => undefined);
 }
 
+/**
+ * 这一转的结算还没发生：停盘后可能要先过换位窗口，
+ * 所以把「旋转前」的快照留在这里，等真正结算时再用来算差值。
+ */
+interface PendingSpin {
+  from: number;
+  destroyedBefore: number;
+  bossHpBefore: number | null;
+  mailBefore?: string;
+}
+let pendingSpin: PendingSpin | null = null;
+
 async function doSpin(): Promise<void> {
   if (ui.animating || game.over || game.won || game.shopOpen || game.spinsLeft <= 0) return;
+  if (game.swapPending) return;
   ui.animating = true;
   ui.removing = false;
-  const from = game.coins;
-  const destroyedBefore = game.destroyed;
-  const bossHpBefore = game.boss?.active ? game.boss.hp : null;
-  const mailBefore = game.mails[0]?.id;
-  spin(game);
-  const destroyedNow = game.destroyed - destroyedBefore;
-  const negative = game.cells.filter((c) => c.def && c.def.value < 0).length;
+  ui.swapFrom = null;
+  pendingSpin = {
+    from: game.coins,
+    destroyedBefore: game.destroyed,
+    bossHpBefore: game.boss?.active ? game.boss.hp : null,
+    mailBefore: game.mails[0]?.id,
+  };
+  const start = beginSpin(game);
+  if (start === 'blocked') {
+    pendingSpin = null;
+    ui.animating = false;
+    return;
+  }
   await animateReels();
   await new Promise((r) => setTimeout(r, settings.reducedMotion ? 0 : 280));
   ui.animating = false;
-  paint(from);
-  mailHint(mailBefore);
+  if (start === 'awaiting-swap') {
+    // 原版在这里插一封 swap_prompt_1 邮件：先看这一转抽到什么，再决定换不换
+    paint();
+    pushToast({
+      icon: '🔀',
+      title: '交换装置',
+      text: '这一转可以交换两个符号的位置（每转一次）',
+    });
+    return;
+  }
+  settleSpin();
+}
+
+/** 换位窗口结束后（换过或跳过）真正结算这一转 */
+function settleSpin(): void {
+  const ctx = pendingSpin;
+  pendingSpin = null;
+  resolveSpin(game);
+  const destroyedNow = ctx ? game.destroyed - ctx.destroyedBefore : 0;
+  const negative = game.cells.filter((c) => c.def && c.def.value < 0).length;
+  paint(ctx?.from);
+  mailHint(ctx?.mailBefore);
   afterEvent({
     t: 'spin',
     output: game.lastSpinOutput,
@@ -338,10 +379,36 @@ async function doSpin(): Promise<void> {
     spawned: game.lastSpawned,
   });
   // 房东战：本回合收入就是伤害（引擎里已结算），这里只补成就事件
-  if (bossHpBefore !== null && game.boss && game.boss.hp < bossHpBefore) {
-    afterEvent({ t: 'boss', damage: bossHpBefore - game.boss.hp });
+  if (ctx && ctx.bossHpBefore !== null && game.boss && game.boss.hp < ctx.bossHpBefore) {
+    afterEvent({ t: 'boss', damage: ctx.bossHpBefore - game.boss.hp });
   }
   saveProfile(profile);
+}
+
+/** 换位窗口里点了一格：第一格记下来，第二格完成交换 */
+function pickSwapSlot(slot: number): void {
+  if (!game.swapPending) return;
+  if (ui.swapFrom === null) {
+    ui.swapFrom = slot;
+    paint();
+    focusSlot(slot);
+    return;
+  }
+  if (ui.swapFrom === slot) {
+    ui.swapFrom = null;
+    paint();
+    return;
+  }
+  const from = ui.swapFrom;
+  const res = swapSymbols(game, from, slot);
+  ui.swapFrom = null;
+  if (!res.ok) {
+    pushToast({ icon: '⚠️', title: '无法换位', text: res.message });
+    paint();
+    return;
+  }
+  settleSpin();
+  flashSwap(from, slot);
 }
 
 /** 新信只弹一条顶栏提示，不自动开面板（避免挡住商店/棋盘） */
@@ -371,8 +438,8 @@ function startRun(): void {
   // 新局就丢掉上一局的存档，免得下次打开又"恢复"到已经放弃的那一局
   clearRun();
   game = createGame(Date.now() % 100000, mode, startFloor);
-  endDrag();
-  ui.holding = null;
+  pendingSpin = null;
+  ui.swapFrom = null;
   ui.detail = null;
   ui.peek = null;
   ui.itemDetail = null;
@@ -516,6 +583,8 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       break;
     }
     case 'removal-mode':
+      // 停盘等换位时不能动棋盘：这一转的结算目标已经定了，原版同样把移除留在旋转前
+      if (game.swapPending) return;
       if (!ui.removing && game.removalTokens < game.removalCost) {
         pushToast({ icon: '⚠️', title: '移除代币不足', text: `需要 ${game.removalCost} 个移除代币` });
         return;
@@ -591,6 +660,15 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       ui.peek = null;
       break;
     }
+    case 'swap':
+      pickSwapSlot(Number(el.dataset.index));
+      return;
+    case 'swap-skip':
+      if (!game.swapPending) return;
+      skipSwap(game);
+      ui.swapFrom = null;
+      settleSpin();
+      return;
     case 'inspect': {
       const target = event.target as HTMLElement;
       if (target.closest('.float')) return;
@@ -618,144 +696,35 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
   paint();
 }
 
-/* ── 拖拽重排 ──
+/* ── 棋盘焦点与换位反馈 ──
  *
- * 位置是玩家唯一能主动干预产出的手段（把乘数符号挪到中心格、让邻居去吃），
- * 所以棋盘上的格子可以直接拖动互换。三个要点：
- *   · 超过阈值才算拖动，否则松手仍然按"点开定义/移除"处理；
- *   · 交换落到引擎的 reels 上，paint() 之后补一段弹跳动画做反馈；
- *   · 拖动过程中把 click 吞掉，避免松手顺手点开详情面板。
+ * 原版没有任何拖拽棋盘的实现（脚本里没有 drag_and_drop / get_drag_data /
+ * drop_data，输入层也只有 inspect / enable_disable_item / confirm_select /
+ * deny_cancel），位置干预的唯一手段是 swapping_device 道具：每转一次、只换
+ * 两个格子，见引擎的 swapSymbols。所以这里不再接管指针，只留键盘导航和
+ * 交换后的弹跳反馈。
  */
-
-/** 拖动多少像素才算"拖"而不是"点" */
-const DRAG_THRESHOLD = 8;
-let swallowClickUntil = 0;
-
-let dragFrom: number | null = null;
-let dragOrigin: { x: number; y: number } | null = null;
-let dragMoved = false;
-let dragGhost: HTMLElement | null = null;
-let dragPointer: number | null = null;
 
 function tileEl(slot: number): HTMLElement | null {
   return document.querySelector<HTMLElement>(`.tile[data-slot="${slot}"]`);
-}
-
-function slotAtPoint(x: number, y: number): number | null {
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  const tile = el?.closest<HTMLElement>('.tile');
-  if (!tile) return null;
-  const n = Number(tile.dataset.slot);
-  return Number.isInteger(n) ? n : null;
-}
-
-function canRearrange(): boolean {
-  return screen === 'game' && !ui.animating && !ui.removing && !game.shopOpen && !game.over && !game.won;
-}
-
-function endDrag(): void {
-  dragGhost?.remove();
-  dragGhost = null;
-  dragFrom = null;
-  dragOrigin = null;
-  dragPointer = null;
-  dragMoved = false;
-  document
-    .querySelectorAll('.tile.dragging, .tile.drag-hover')
-    .forEach((el) => el.classList.remove('dragging', 'drag-hover'));
-}
-
-/** 交换两格并重绘；返回是否真的换了 */
-function applyMove(from: number, to: number): boolean {
-  if (!moveSymbol(game, from, to).ok) return false;
-  paint();
-  for (const slot of [from, to]) {
-    const el = tileEl(slot);
-    if (!el) continue;
-    el.classList.add('just-moved');
-    setTimeout(() => el.classList.remove('just-moved'), 420);
-  }
-  return true;
 }
 
 function focusSlot(slot: number): void {
   tileEl(slot)?.focus({ preventScroll: true });
 }
 
-document.addEventListener(
-  'pointerdown',
-  (event) => {
-    if (!canRearrange()) return;
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
-    const tile = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tile');
-    if (!tile || tile.classList.contains('empty')) return;
-    const slot = Number(tile.dataset.slot);
-    if (!Number.isInteger(slot)) return;
-    dragFrom = slot;
-    dragOrigin = { x: event.clientX, y: event.clientY };
-    dragPointer = event.pointerId;
-    dragMoved = false;
-    try {
-      tile.setPointerCapture(event.pointerId);
-    } catch {
-      /* 没有指针捕获也不影响，document 上的监听照样收到 */
-    }
-  },
-  { passive: true },
-);
-
-document.addEventListener(
-  'pointermove',
-  (event) => {
-    if (dragFrom === null || !dragOrigin) return;
-    if (dragPointer !== null && event.pointerId !== dragPointer) return;
-    if (!dragMoved) {
-      if (Math.hypot(event.clientX - dragOrigin.x, event.clientY - dragOrigin.y) < DRAG_THRESHOLD) return;
-      dragMoved = true;
-      const src = tileEl(dragFrom);
-      if (src) {
-        src.classList.add('dragging');
-        const rect = src.getBoundingClientRect();
-        dragGhost = document.createElement('div');
-        dragGhost.className = `${src.className.replace(/\bdragging\b/, '').trim()} drag-ghost`;
-        dragGhost.innerHTML = src.innerHTML;
-        dragGhost.style.width = `${rect.width}px`;
-        dragGhost.style.height = `${rect.height}px`;
-        dragGhost.style.setProperty('--cell', `${Math.round(rect.width)}px`);
-        document.body.appendChild(dragGhost);
-      }
-    }
-    // 棋盘不滚动，这里可以直接吃掉手势，避免移动端把拖动当成滚动
-    event.preventDefault();
-    if (dragGhost) {
-      dragGhost.style.transform = `translate(${event.clientX}px, ${event.clientY}px) translate(-50%, -50%)`;
-    }
-    document.querySelectorAll('.tile.drag-hover').forEach((el) => el.classList.remove('drag-hover'));
-    const slot = slotAtPoint(event.clientX, event.clientY);
-    if (slot !== null && slot !== dragFrom) tileEl(slot)?.classList.add('drag-hover');
-  },
-  { passive: false },
-);
-
-document.addEventListener('pointerup', (event) => {
-  if (dragFrom === null) return;
-  const from = dragFrom;
-  const moved = dragMoved;
-  const slot = moved ? slotAtPoint(event.clientX, event.clientY) : null;
-  endDrag();
-  if (!moved) return; // 没拖动过：交给 click 去做「查看定义 / 移除」
-  swallowClickUntil = performance.now() + 400;
-  if (slot !== null && slot !== from) applyMove(from, slot);
-});
-
-document.addEventListener('pointercancel', () => {
-  if (dragFrom === null) return;
-  endDrag();
-  swallowClickUntil = performance.now() + 400;
-});
+/** 换位成功后给两格补一段弹跳，替代原先拖动时的幽灵牌反馈 */
+function flashSwap(a: number, b: number): void {
+  for (const slot of [a, b]) {
+    const el = tileEl(slot);
+    if (!el) continue;
+    el.classList.add('just-moved');
+    setTimeout(() => el.classList.remove('just-moved'), 420);
+  }
+}
 
 /**
- * 键盘操作棋盘：焦点落在格子上时 Enter/Space 拾起，方向键换位，再按一次放下。
+ * 键盘操作棋盘：方向键在格阵里移动焦点；换位窗口里 Enter/Space 选格子。
  * 返回 true 表示这次按键已被棋盘消费。
  */
 function handleBoardKey(event: KeyboardEvent): boolean {
@@ -769,49 +738,12 @@ function handleBoardKey(event: KeyboardEvent): boolean {
     ArrowDown: COLS,
   };
 
-  if (ui.holding !== null) {
-    const held = ui.holding;
-    if (event.key in STEPS) {
-      event.preventDefault();
-      const to = held + STEPS[event.key];
-      if (to < 0 || to >= CELL_COUNT) return true;
-      if (event.key === 'ArrowLeft' && held % COLS === 0) return true;
-      if (event.key === 'ArrowRight' && held % COLS === COLS - 1) return true;
-      const prev = ui.holding;
-      ui.holding = to;
-      if (!applyMove(held, to)) {
-        ui.holding = prev;
-        paint();
-        focusSlot(held);
-        return true;
-      }
-      focusSlot(to);
-      return true;
-    }
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      ui.holding = null;
-      paint();
-      if (activeSlot !== null) focusSlot(activeSlot);
-      return true;
-    }
-    if (event.key === 'Escape') {
-      ui.holding = null;
-      paint();
-      if (activeSlot !== null) focusSlot(activeSlot);
-      return true;
-    }
-    return false;
-  }
-
   if (!activeTile || activeSlot === null || !Number.isInteger(activeSlot)) return false;
 
-  if (event.key === 'Enter' || event.key === ' ') {
+  // 换位窗口：Enter/Space 等同于点一下这一格（选第一格 / 完成交换）
+  if ((event.key === 'Enter' || event.key === ' ') && game.swapPending) {
     event.preventDefault();
-    if (!canRearrange()) return true;
-    ui.holding = activeSlot;
-    paint();
-    focusSlot(activeSlot);
+    pickSwapSlot(activeSlot);
     return true;
   }
   if (event.key in STEPS) {
@@ -828,8 +760,6 @@ function handleBoardKey(event: KeyboardEvent): boolean {
 
 document.addEventListener('click', (event) => {
   const target = event.target as HTMLElement | null;
-  // 刚拖完的那一下不当作点击
-  if (performance.now() < swallowClickUntil && target?.closest('.tile')) return;
   // 彩蛋：点狗/兔子撸一下（仍照常打开详情，两件事互不干扰）
   const eggTile = target?.closest<HTMLElement>('.tile[data-egg]');
   if (eggTile && screen === 'game' && !ui.removing) petOnce(eggTile.dataset.egg ?? '', eggTile);
@@ -854,7 +784,7 @@ document.addEventListener('pointerout', (event) => {
   stopPet();
 });
 
-// 快捷键：棋盘上的方向键/Enter 归拖拽重排，Esc 退回一层（移除模式 → 信箱 → 牌库 → 成就/统计 → 详情面板）
+// 快捷键：棋盘上方向键移动焦点、换位窗口里 Enter 选格；Esc 退回一层（移除模式 → 信箱 → 牌库 → 成就/统计 → 详情面板）
 document.addEventListener('keydown', (event) => {
   if (handleBoardKey(event)) return;
   if (event.key !== 'Escape') return;
@@ -872,6 +802,17 @@ document.addEventListener('keydown', (event) => {
   if (ui.confirmHome) {
     ui.confirmHome = false;
     paint();
+    return;
+  }
+  // 换位窗口：Esc 先取消已选的那一格，再按一次就跳过换位继续结算
+  if (game.swapPending) {
+    if (ui.swapFrom !== null) {
+      ui.swapFrom = null;
+      paint();
+    } else {
+      skipSwap(game);
+      settleSpin();
+    }
     return;
   }
   if (ui.removing) {

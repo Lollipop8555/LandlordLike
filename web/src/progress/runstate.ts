@@ -96,6 +96,9 @@ export function loadRun(): GameState | null {
     state.lastKills ??= [];
     state.lastSpawned ??= [];
     state.pendingStats ??= {};
+    // 换位装置的等待窗口不能跨存档：恢复后按「这一转还没停盘」处理，重按旋转即可
+    state.swapPending = false;
+    state.swapUsed ??= false;
     const rand = mulberry32(snap.seed);
     const calls = Math.max(0, Math.trunc(snap.randCalls ?? 0));
     for (let i = 0; i < calls; i += 1) rand();

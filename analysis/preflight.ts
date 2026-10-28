@@ -29,11 +29,13 @@ import {
   SYMBOLS,
   symbol,
 } from '../web/src/data';
-import { symbolCoverage } from '../web/src/effects';
+import { applyItemEffects, symbolCoverage } from '../web/src/effects';
+import { essenceLines, isEssence } from '../web/src/essence-notes';
 import { UNIMPLEMENTED_SYMBOLS } from '../web/src/unimplemented';
 import { emojiOf } from '../web/src/sprites';
 import {
   applySymbolRemovalItems,
+  beginSpin,
   bossRent,
   buyFromShop,
   closeShop,
@@ -48,8 +50,11 @@ import {
   removeSymbolAt,
   rentFor,
   rerollShop,
+  resolveSpin,
+  skipSwap,
   spin,
   startBossFight,
+  swapSymbols,
   unreadMails,
   visibleCells,
 } from '../web/src/engine';
@@ -579,6 +584,86 @@ function removalIssues(): string[] {
 const removal = removalIssues();
 check('B 引擎', '道具吃符号（含细则 20/21 例外）', removal.length === 0, removal.slice(0, 3).join(' · '));
 
+/* ── 道具侧生成声明：祭坛（叠层数）与莫比乌斯环（saved_value 上限）── */
+
+/** Item__Item.gd:1957 祭坛、:2335 莫比乌斯环——以前这两条声明有行无数 */
+function itemSpawnIssues(): string[] {
+  const issues: string[] = [];
+  const shrine = ITEMS.find((i) => i.id === 'shrine')!;
+  const mobius = ITEMS.find((i) => i.id === 'mobius_strip')!;
+  const organism = SYMBOLS.find((s) => s.groups?.includes('organism'))!;
+  const box = SYMBOLS.find((s) => s.groups?.includes('box'))!;
+
+  const dead = (def: unknown) => {
+    const cell = createCell(def as never);
+    cell.destroyed = true;
+    return cell;
+  };
+
+  // 祭坛：叠 3 层 → 一个被摧毁的生物符号应当换来 3 个灵魂
+  const shrineSpawns: Array<{ type?: string }> = [];
+  applyItemEffects(
+    [{ def: shrine, count: 3 }],
+    [dead(organism), createCell(null)],
+    { chanceRoll: () => 0.1, spawn: (spec) => shrineSpawns.push(spec) },
+  );
+  if (shrineSpawns.length !== 3) issues.push(`祭坛 3 层只生成 ${shrineSpawns.length} 个`);
+  if (shrineSpawns.some((s) => s.type !== 'spirit')) issues.push('祭坛生成的不是灵魂');
+
+  // 莫比乌斯环：50% 命中 → 把被摧毁的符号原样补回，并攒一次 saved_value
+  const hitSpawns: Array<{ type?: string }> = [];
+  const hitItem: { def: unknown; count: number; savedValue?: number } = { def: mobius, count: 1 };
+  applyItemEffects([hitItem as never], [dead(box), createCell(null)], {
+    chanceRoll: () => 0.1,
+    spawn: (spec) => hitSpawns.push(spec),
+  });
+  if (hitSpawns.length !== 1) issues.push(`莫比乌斯环命中却生成 ${hitSpawns.length} 个`);
+  if (hitSpawns[0]?.type !== box.id) issues.push(`补回的符号是 ${hitSpawns[0]?.type} 而非 ${box.id}`);
+  if (hitItem.savedValue !== 1) issues.push(`saved_value 未 +1（${hitItem.savedValue}）`);
+
+  // 上限由 `saved_value < values[1]` 控制：攒满 7 次后不再补
+  const cappedSpawns: Array<unknown> = [];
+  applyItemEffects([{ def: mobius, count: 1, savedValue: 7 }], [dead(box), createCell(null)], {
+    chanceRoll: () => 0.1,
+    spawn: (spec) => cappedSpawns.push(spec),
+  });
+  if (cappedSpawns.length !== 0) issues.push(`攒满 7 次后仍在补（${cappedSpawns.length}）`);
+  return issues;
+}
+
+const itemSpawn = itemSpawnIssues();
+check('B 引擎', '道具生成（祭坛叠层 / 莫比乌斯环上限）', itemSpawn.length === 0, itemSpawn.join(' · '));
+
+/* ── 精华文案：不能把「销毁自己」这类技术声明念给玩家 ── */
+
+function essenceTextIssues(): string[] {
+  const issues: string[] = [];
+  for (const e of ESSENCES) {
+    if (!isEssence(e.id)) {
+      issues.push(`${e.id} 不是精华却进了精华表`);
+      continue;
+    }
+    const lines = essenceLines(e.id);
+    if (lines.length < 2) issues.push(`${e.id} 只有 ${lines.length} 行`);
+    if (lines.some((t) => t.includes('摧毁自己'))) issues.push(`${e.id} 仍念出「摧毁自己」`);
+    if (lines.some((t) => t.includes('被其他符号触发'))) issues.push(`${e.id} 仍念出触发技术句`);
+    if (lines.some((t) => t.includes('本符号'))) issues.push(`${e.id} 残留「本符号」`);
+    if (!lines.some((t) => t.includes('强化版') || t.includes('精华'))) {
+      issues.push(`${e.id} 没有说清是强化版`);
+    }
+    // 末行必须交代它怎么没的，否则玩家不知道这是一次性消耗品
+    if (!/(消耗|一次性)/.test(lines[lines.length - 1] ?? '')) {
+      issues.push(`${e.id} 末行没交代消耗方式`);
+    }
+  }
+  if (issues.length > 0) return issues.slice(0, 4);
+  return issues;
+}
+
+const essenceText = essenceTextIssues();
+check('B 引擎', '精华文案按消耗品措辞', essenceText.length === 0, essenceText.join(' · '));
+
+
 /* ── 三种代币（原版 reroll / removal / essence）── */
 
 /** 依次递增的确定性 rand */
@@ -796,6 +881,58 @@ check(
   '无尽模式付完 12 期不结束',
   !endless.won && !endless.over && endless.rentPaid === 12,
   `won=${endless.won} over=${endless.over} rentPaid=${endless.rentPaid}`,
+);
+
+/* ── B2. 换位装置（原版唯一的位置干预，Pop-up__Pop-up.gd:2638） ── */
+
+// 没有道具时：停盘即结算，也没有换位入口
+const noSwap = createGame(24);
+noSwap.cells = visibleCells(noSwap.reels);
+const noSwapStart = beginSpin(noSwap);
+const noSwapTry = swapSymbols(noSwap, 0, 1);
+check(
+  'B 引擎',
+  '没有换位装置就不能换位',
+  noSwapStart === 'resolving' && noSwapTry.ok === false,
+  `${noSwapStart} / ${noSwapTry.message}`,
+);
+
+// 持有道具时：停盘后必须等玩家决定，每转只能换一次
+const withSwap = createGame(24);
+const devDef = ITEMS.find((it) => it.id === 'swapping_device');
+withSwap.items.push({ def: devDef, count: 1 });
+withSwap.cells = visibleCells(withSwap.reels);
+const swapStart = beginSpin(withSwap);
+const coinsBeforeResolve = withSwap.coins;
+resolveSpin(withSwap); // 还在等待窗口里，应被挡下
+const blocked = withSwap.coins === coinsBeforeResolve && withSwap.swapPending;
+
+const pick = withSwap.cells.findIndex((c) => c.def);
+const pick2 = withSwap.cells.findIndex((c, i) => c.def && i !== pick);
+const first = swapSymbols(withSwap, pick, pick2);
+const swappedCorrectly =
+  first.ok &&
+  withSwap.cells[pick].def?.id === withSwap.reels[pick % COLS][Math.floor(pick / COLS) + 1]?.def?.id;
+const second = swapSymbols(withSwap, pick2, pick);
+check(
+  'B 引擎',
+  '换位装置：停盘后等玩家，且每转只能换一次',
+  swapStart === 'awaiting-swap' && blocked && swappedCorrectly && second.ok === false,
+  `start=${swapStart} blocked=${blocked} first=${first.ok} second=${second.ok}(${second.message})`,
+);
+
+// 跳过换位：这一转照常结算
+const skipGame = createGame(24);
+skipGame.items.push({ def: devDef, count: 1 });
+skipGame.cells = visibleCells(skipGame.reels);
+const skipStart = beginSpin(skipGame);
+skipSwap(skipGame);
+resolveSpin(skipGame);
+check(
+  'B 引擎',
+  '跳过换位后照常结算',
+  skipStart === 'awaiting-swap' && !skipGame.swapPending && skipGame.totalSpins === 1,
+  `start=${skipStart} spins=${skipGame.totalSpins}`,
 );
 
 /* ── C. 交互键位 ── */

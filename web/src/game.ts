@@ -14,11 +14,13 @@ import {
 import type { Mail } from './mail';
 import { evaluateCell } from './value';
 import { RARITY_LABEL, emojiOf } from './sprites';
-import { FINE_PRINTS, RENT_TABLE, SYMBOL_BY_ID } from './data';
+import { FINE_PRINTS, ITEM_BY_ID, RENT_TABLE, SYMBOL_BY_ID } from './data';
 import { META } from './data';
-import { describeFinePrint, describeRule, rulesOf } from './effects';
+import { describeFinePrint, describeRule, itemGateNotes, rulesOf } from './effects';
+import { essenceLines, isEssence } from './essence-notes';
+import { ITEM_NOTES } from './item-notes';
 import { groupList, literalName, symbolName } from './names';
-import { isUnimplemented } from './unimplemented';
+import { isItemUnimplemented, isUnimplemented } from './unimplemented';
 import { EGG_BY_ID } from './easter-eggs';
 
 export interface GameUi {
@@ -40,13 +42,19 @@ export interface GameUi {
   mailOpen: string | null;
   /** 返回标题前的确认层 */
   confirmHome: boolean;
-  /** 键盘拾起的格子下标（Enter/Space 拿起，方向键移动，Enter 放下） */
-  holding: number | null;
+  /** 换位装置：已选中的第一格（还能再点一格完成交换，null 表示还没选） */
+  swapFrom: number | null;
   /** 设置面板（标题页与对局中都能开） */
   settingsOpen: boolean;
 }
 
 const money = (n: number): string => n.toLocaleString('en-US');
+
+/** 换位提示里怎么称呼一格：符号名，或「空位」 */
+function slotLabel(game: GameState, slot: number): string {
+  const def = game.cells[slot]?.def;
+  return def ? symbolName(def.id) : '空位';
+}
 
 export function renderGame(game: GameState, ui: GameUi): string {
   // 本期租金 = 基础表 + 楼层加成（Pop-up.update_rent_values）
@@ -62,8 +70,8 @@ export function renderGame(game: GameState, ui: GameUi): string {
   const shortfall = Math.max(0, rent - game.coins);
   const broke = game.spinsLeft === 0 && shortfall > 0;
   const ended = game.over || game.won;
-  const canSpin = !ended && !game.shopOpen && game.spinsLeft > 0 && !ui.animating;
-  const canPay = !ended && !game.shopOpen && game.spinsLeft === 0 && !ui.animating;
+  const canSpin = !ended && !game.shopOpen && game.spinsLeft > 0 && !ui.animating && !game.swapPending;
+  const canPay = !ended && !game.shopOpen && game.spinsLeft === 0 && !ui.animating && !game.swapPending;
   const bossHp = boss ? Math.max(0, boss.hp) : 0;
   const bossPct = boss ? (bossHp / boss.maxHp) * 100 : 0;
   const cleared = !bossMode && game.won && game.mode === 'normal';
@@ -93,19 +101,25 @@ export function renderGame(game: GameState, ui: GameUi): string {
       ? '已付 12 / 12 期'
       : `HP ${money(landlordHp)} / ${money(landlordMax)}`;
 
+  const swapping = game.swapPending;
   const tiles = game.cells
     .map((cell, i) => {
       const final = game.lastFinals[i] ?? 0;
-      if (!cell.def) return `<div class="tile empty" data-slot="${i}" aria-hidden="true"></div>`;
+      if (!cell.def) {
+        // 换位时空格也能当落点（源码 swap_icon_positions 连 empty 一起换）
+        return swapping
+          ? `<div class="tile empty swap-open" data-slot="${i}" data-action="swap" data-index="${i}"></div>`
+          : `<div class="tile empty" data-slot="${i}" aria-hidden="true"></div>`;
+      }
       const synergy = cell.valueBonus;
-      const action = ui.removing ? 'remove' : 'inspect';
-      // 位置信息对拖拽/键盘操作是必要的：读屏只说符号名，玩家不知道自己在第几格
+      const action = swapping ? 'swap' : ui.removing ? 'remove' : 'inspect';
+      // 位置信息对键盘操作是必要的：读屏只说符号名，玩家不知道自己在第几格
       const pos = `第 ${Math.floor(i / COLS) + 1} 行第 ${(i % COLS) + 1} 列`;
-      const held = ui.holding === i ? ' holding' : '';
+      const picked = swapping && ui.swapFrom === i ? ' swap-pick' : swapping ? ' swap-open' : '';
       // 彩蛋：狗/兔子能撸（悬停或点一下），其余符号不挂这个属性
       const egg = EGG_BY_ID.get(cell.def.id);
       return `
-      <div class="tile r-${cell.def.rarity || 'common'}${ui.removing ? ' removable' : ''}${held}" data-slot="${i}" data-action="${action}" data-index="${i}"${egg ? ` data-egg="${egg.id}"` : ''} tabindex="0" role="button" aria-label="${symbolName(cell.def.id)}（${pos}）${egg ? `，可${egg.verb}` : ''}，拖动可换位">
+      <div class="tile r-${cell.def.rarity || 'common'}${ui.removing ? ' removable' : ''}${picked}" data-slot="${i}" data-action="${action}" data-index="${i}"${egg ? ` data-egg="${egg.id}"` : ''} tabindex="0" role="button" aria-label="${symbolName(cell.def.id)}（${pos}）${egg ? `，可${egg.verb}` : ''}${swapping ? '，可换位' : ''}">
         <div class="face">${emojiOf(cell.def)}</div>
         <div class="num ${final < 0 ? 'neg' : ''}">${final}</div>
         ${synergy ? `<div class="syn">+${synergy}</div>` : ''}
@@ -157,8 +171,8 @@ export function renderGame(game: GameState, ui: GameUi): string {
       </div>
       <div class="hud-row token-row">
         <span class="token-chip" title="重掷代币：在商店里换一批候选（每次 ${game.rerollCost}）">${TOKEN_ICON.reroll} <b>${game.rerollTokens}</b></span>
-        <button class="token-chip ${ui.removing ? 'active' : ''} ${game.removalTokens >= game.removalCost ? '' : 'spent'}"
-          data-action="removal-mode" title="移除代币：点这里再点一个符号把它删掉（每次 ${game.removalCost}）">
+        <button class="token-chip ${ui.removing ? 'active' : ''} ${game.removalTokens >= game.removalCost && !swapping ? '' : 'spent'}"
+          data-action="removal-mode" ${swapping ? 'disabled' : ''} title="移除代币：点这里再点一个符号把它删掉（每次 ${game.removalCost}）">
           ${TOKEN_ICON.removal} <b>${game.removalTokens}</b>
         </button>
         <span class="token-chip" title="精华代币：把道具升级成精华版，付租时未用会作废">${TOKEN_ICON.essence} <b>${game.essenceTokens}</b></span>
@@ -173,7 +187,11 @@ export function renderGame(game: GameState, ui: GameUi): string {
       </div>
       <div class="hud-hint ${broke ? 'short' : ''}">
         ${
-          ui.removing
+          game.swapPending
+            ? ui.swapFrom === null
+              ? '🔀 交换装置：这一转可以交换两个符号的位置（每转一次），先点一个符号'
+              : `🔀 已选 ${slotLabel(game, ui.swapFrom)}，再点一格完成交换`
+            : ui.removing
             ? `移除模式：点棋盘上任意符号删掉它（每次 ${game.removalCost} 移除代币，再点🗑️ 取消）`
             : bossMode
             ? game.won
@@ -200,7 +218,9 @@ export function renderGame(game: GameState, ui: GameUi): string {
 
     <div class="actions">
       ${
-        ended
+        game.swapPending
+          ? `<button class="ghost-btn swap-skip" data-action="swap-skip">不换位，继续结算</button>`
+          : ended
           ? `<button class="big-btn danger" data-action="reset">${
               game.won ? (game.boss ? '🏆 击败房东 · 再来一局' : '🎉 已通关 · 再来一局') : '💀 破产 · 重新开始'
             }</button>`
@@ -512,17 +532,49 @@ function mergeSameCondition(texts: string[]): string[] {
 function renderDeclarations(id: string): string {
   const def = SYMBOL_BY_ID.get(id) ?? null;
   const owner = def ? { id: def.id, values: def.values ?? [] } : undefined;
-  const texts: string[] = [];
-  for (const rule of rulesOf(id)) {
-    const text = describeRule(rule, owner);
-    if (text && !texts.includes(text)) texts.push(text);
-  }
-  const merged = mergeSameCondition(texts);
   const head = `<div class="decl-head">${symbolName(id)} <span class="muted small">${literalName(id)}</span></div>`;
   // 玩法还没补全的符号要明说，否则玩家会以为自己漏看了什么机制
   const warn = isUnimplemented(id)
     ? `<p class="decl-warn">⚠ 这张的玩法还在补：目前只有基础值，暂时不会出现在商店里</p>`
-    : '';
+    : isItemUnimplemented(id)
+      ? `<p class="decl-warn">⚠ 这件道具的效果还没还原：买下只得到它的数值，不触发任何结算</p>`
+      : '';
+  // 精华走自己的措辞：数据里是「触发→销毁自己」+「销毁→永久加成」两条技术声明，
+  // 通用渲染会读成「被其他符号触发过时，摧毁自己」，玩家看不出它强化了什么
+  if (isEssence(id)) {
+    const rows = essenceLines(id)
+      .map((text) => `<div class="decl"><div class="decl-cond">${text}</div></div>`)
+      .join('');
+    return `
+      <div class="decls">
+        ${head}
+        ${warn}
+        ${rows}
+      </div>`;
+  }
+  const texts: string[] = [];
+  // 一次性道具的效果写在购买瞬间，没有可渲染的声明，用固定说明补上
+  const note = ITEM_NOTES[id];
+  if (note) texts.push(note);
+  for (const rule of rulesOf(id)) {
+    const text = describeRule(rule, owner);
+    if (text && !texts.includes(text)) texts.push(text);
+  }
+  // 有些道具自身没有声明，功能全写在别的符号里（幸运猫改猫的稀有度、第五张 A 加成花色）
+  if (ITEM_BY_ID.has(id)) {
+    const byOwner = new Map<string, string[]>();
+    for (const gate of itemGateNotes(id)) {
+      const arr = byOwner.get(gate.owner) ?? [];
+      if (!arr.includes(gate.text)) arr.push(gate.text);
+      byOwner.set(gate.owner, arr);
+    }
+    for (const [ownerId, arr] of byOwner) {
+      // 规则的 symbol 可能是 clubs|spades 这样的多归属写法，逐个译名
+      const names = ownerId.split('|').map((x) => symbolName(x)).join('、');
+      texts.push(`此外还影响${names}：${arr.join('；')}`);
+    }
+  }
+  const merged = mergeSameCondition(texts);
   if (texts.length === 0) {
     return `
       <div class="decls">

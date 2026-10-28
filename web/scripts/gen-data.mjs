@@ -122,6 +122,15 @@ function itemEffects() {
       comparisons: JSON.parse(r.comparisons || '[]'),
       vtc: r.vtc || '',
       diff: JSON.parse(r.diff || 'null'),
+      // 生成：[{type|group, minRarity, count}]，道具版也有（煎锅→煎蛋）
+      spawn: r.tiles_to_add
+        ? JSON.parse(r.tiles_to_add).map((s) => ({
+            type: s.type,
+            group: s.group,
+            minRarity: s.min_rarity,
+            count: s.count,
+          }))
+        : undefined,
       kind,
       flags: flags.filter((f) => !f.startsWith('kind:')),
     };

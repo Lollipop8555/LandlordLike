@@ -156,43 +156,32 @@ body {
 .tile[data-action='inspect'] { cursor: pointer; }
 .tile[data-action='inspect']:hover { transform: translateY(-2px); }
 
-/* ── 拖拽重排 ──
-   棋盘本身不需要滚动（html/body 已锁死），把触摸手势全部收给指针事件，
-   否则移动端会被判成滚动，拖到一半就断 */
-.tile { touch-action: none; -webkit-tap-highlight-color: transparent; }
+/* ── 棋盘交互 ──
+   原版没有拖拽，这里也不接管指针：换位只发生在 swapping_device 的窗口里，
+   即「点一格、再点一格」的两次点击。 */
+.tile { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .tile:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
-.tile[data-action='inspect'] { cursor: grab; }
-.tile[data-action='inspect']:active { cursor: grabbing; }
-.tile.dragging { opacity: 0.32; transform: none; }
-.tile.drag-hover {
-  outline: 2px dashed var(--gold); outline-offset: -3px;
-  background: linear-gradient(170deg, #1d2a42, #131b2b);
+.tile[data-action='inspect'] { cursor: pointer; }
+.tile[data-action='inspect']:active { transform: scale(0.97); }
+
+/* 换位窗口：可点的格子虚线框，已选中的一格实线高亮 */
+.tile.swap-open {
+  cursor: pointer;
+  outline: 2px dashed rgba(245, 196, 81, 0.55); outline-offset: -3px;
 }
-/* 键盘拾起：实线框 + 轻微抬起，和拖拽的虚线目标区分开 */
-.tile.holding {
+.tile.swap-open:hover { background: linear-gradient(170deg, #1d2a42, #131b2b); }
+.tile.swap-pick {
+  cursor: pointer;
   outline: 2px solid var(--gold); outline-offset: -2px;
   box-shadow: 0 0 0 3px rgba(245, 196, 81, 0.18), inset 0 0 18px rgba(245, 196, 81, 0.16);
   transform: translateY(-3px);
 }
 .tile.just-moved { animation: swapPop 0.42s cubic-bezier(0.2, 1.4, 0.4, 1); }
 
-/* 拖动中的幽灵牌：跟着指针走，鼠标事件一律穿透 */
-.drag-ghost {
-  position: fixed; left: 0; top: 0; z-index: 90;
-  pointer-events: none;
-  opacity: 0.95;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
-  animation: ghostLift 0.12s ease-out;
-}
-
 @keyframes swapPop {
   0% { transform: scale(0.84); }
   55% { transform: scale(1.08); }
   100% { transform: scale(1); }
-}
-@keyframes ghostLift {
-  0% { opacity: 0.5; }
-  100% { opacity: 0.95; }
 }
 
 @keyframes roll {

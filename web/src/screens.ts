@@ -224,18 +224,18 @@ export function renderSettingsPanel(settings: Settings, hasRun: boolean): string
 }
 
 /**
- * 首次引导：只讲三件"不看就会打错"的事——拖拽换位、旋转与期数、付租与商店。
+ * 首次引导：只讲三件"不看就会打错"的事——位置与邻接、旋转与期数、付租与商店。
  * 内容刻意短，每步三条；具体数值留给牌库和细则面板。
  */
 export const TUTORIAL_STEPS: Array<{ icon: string; title: string; lead: string; points: string[] }> = [
   {
     icon: '🧲',
-    title: '棋盘可以拖',
-    lead: '符号就是你的牌组，位置不是装饰。',
+    title: '位置不是装饰',
+    lead: '符号就是你的牌组，落在哪一格由旋转决定。',
     points: [
-      '拖动任意两格互换位置；相邻加成的落点由位置决定',
-      '键盘：Tab 选中格子，Enter 拾起，方向键换位，再按一次放下',
-      '把乘数符号围到中心格，是突破租金曲线的主要手法',
+      '相邻加成沿邻接传播，位置决定增益落在谁身上',
+      '棋盘不能自由拖动；只有稀有的「交换装置」能在每转停盘后换一次，两个格子',
+      '所以想叠乘数，靠的是抽到相邻，而不是摆好阵型',
     ],
   },
   {

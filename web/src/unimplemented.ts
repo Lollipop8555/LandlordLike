@@ -21,3 +21,31 @@ export const UNIMPLEMENTED_SYMBOLS: ReadonlySet<string> = new Set<string>([]);
 export function isUnimplemented(id: string): boolean {
   return UNIMPLEMENTED_SYMBOLS.has(id);
 }
+
+// 还没还原效果的道具：既没有自身声明（`item_effects.csv` 零行），也没有被别的符号
+// 当作前置条件引用，买下来只是一件带数值的持有物。清单来源是逐条比对源码后确认
+// 「行为不在 add_conditional_effects 里，也不在 Item__Item.gd 的 match type 分支里」。
+// 从这份清单里拿掉一项的前提是真的实现了效果，并同步补上描述。
+export const UNIMPLEMENTED_ITEMS: ReadonlySet<string> = new Set<string>([
+  'ancient_lizard_blade',
+  'bag_of_holding',
+  'capsule_machine',
+  'checkered_flag',
+  'clear_sky',
+  'comfy_pillow',
+  'copycat',
+  'cursed_katana',
+  'devils_deal',
+  'gray_pepper',
+  'item_missing',
+  'lime_pepper',
+  'pink_pepper',
+  'popsicle',
+  'quiver',
+  'time_machine',
+  'void_party',
+]);
+
+export function isItemUnimplemented(id: string): boolean {
+  return UNIMPLEMENTED_ITEMS.has(id);
+}

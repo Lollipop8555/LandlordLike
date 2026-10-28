@@ -185,6 +185,13 @@ export interface GameState {
   finePrintThreshold: number;
   /** 稀有度出现权重（Pop-up.rarity_bonuses），每转由符号声明重算 */
   rarityBonus: RarityBonus;
+  /**
+   * 停盘后正在等玩家用换位装置选格子（原版 swap_prompt_1 挡在结算之前）。
+   * true 时 resolveSpin 不会执行，UI 必须先 swapSymbols 或 skipSwap。
+   */
+  swapPending: boolean;
+  /** 本转是否已经用掉换位装置（原版 sme_this_spin，每转重置） */
+  swapUsed: boolean;
 }
 
 let uidCounter = 1;
@@ -311,6 +318,8 @@ export function createGame(seed = 20261027, mode: GameMode = 'normal', floor = 1
     finePrintCounter: 0,
     finePrintThreshold: Math.max(1, Math.floor(landlordMaxHp(chosenFloor) / 10)),
     rarityBonus: { symbols: {}, items: {} },
+    swapPending: false,
+    swapUsed: false,
   };
   // 开局一封房东来信（原版 intro），只提示、不阻塞操作
   addMail(state, introMail(mode, 0));
@@ -510,13 +519,104 @@ function collectExtraTokens(state: GameState): void {
   });
 }
 
-export function spin(state: GameState): void {
-  if (state.over || state.spinsLeft <= 0) return;
-  if (state.shopOpen) return;
+/**
+ * 本转是否可以换位：持有 swapping_device 且这一转还没用过
+ * （Pop-up__Pop-up.gd:2638，sme_this_spin 去重）。
+ * 至少要盘上有两个符号才有得换。
+ */
+export function canSwapThisSpin(state: GameState): boolean {
+  if (state.swapUsed) return false;
+  if (!state.items.some((it) => it.def.id === 'swapping_device')) return false;
+  return state.cells.filter((cell) => cell.def).length >= 2;
+}
+
+/** beginSpin 的结果：被拦下 / 直接结算 / 停下等玩家换位 */
+export type SpinStart = 'blocked' | 'resolving' | 'awaiting-swap';
+
+/**
+ * 停盘：注入哑弹、洗牌、把 20 格投影到 `cells`，到此为止不结算。
+ *
+ * 原版转轴停下之后、`check_effects` 之前有一个可插入的窗口（Reel__Reel.gd:143
+ * 调 `popup.spin_modifying_effects()`），换位装置就挂在这个窗口里：玩家先看到
+ * 这一转抽到了什么，再决定要不要换两个符号的位置。所以这里只负责「停下」，
+ * 结算交给 resolveSpin。
+ */
+export function beginSpin(state: GameState): SpinStart {
+  if (state.over || state.won || state.spinsLeft <= 0) return 'blocked';
+  if (state.shopOpen) return 'blocked';
 
   injectDud(state);
   shuffleTiles(state);
   state.cells = visibleCells(state.reels);
+  state.swapUsed = false;
+  state.swapPending = false;
+  // 停盘时还没结算：先把数字摆成各自的面板值，否则上一转的产出会留在旧格子上
+  state.lastFinals = state.cells.map((cell) => cell.def?.value ?? 0);
+  state.lastHits = [];
+
+  if (canSwapThisSpin(state)) {
+    state.swapPending = true;
+    return 'awaiting-swap';
+  }
+  return 'resolving';
+}
+
+/** 放弃这一转的换位机会（原版邮件里的 ✕，Pop-up__Pop-up.gd:3068-3075） */
+export function skipSwap(state: GameState): void {
+  if (!state.swapPending) return;
+  state.swapUsed = true;
+  state.swapPending = false;
+}
+
+/**
+ * 用换位装置交换两格（含与空格互换，源码 `swap_icon_positions` 同样只换 type）。
+ * 只在停盘窗口内可用，交换后这一转就不能再换。
+ */
+export function swapSymbols(
+  state: GameState,
+  from: number,
+  to: number,
+): { ok: boolean; message: string } {
+  if (!state.swapPending) return { ok: false, message: '现在不能换位' };
+  if (from === to) return { ok: false, message: '还是同一格' };
+  if (!onBoard(from) || !onBoard(to)) return { ok: false, message: '只能在本层棋盘的可见格里移动' };
+  const a = state.cells[from];
+  const b = state.cells[to];
+  if (!a || !b) return { ok: false, message: '格子已变动，请重试' };
+  if (!a.def && !b.def) return { ok: false, message: '两格都是空的' };
+
+  const ax = from % REELS_X;
+  const ay = Math.floor(from / REELS_X) + 1;
+  const bx = to % REELS_X;
+  const by = Math.floor(to / REELS_X) + 1;
+  state.reels[ax][ay] = b;
+  state.reels[bx][by] = a;
+  state.cells = visibleCells(state.reels);
+  // 位置变了，停盘阶段摆的面板值也跟着换，免得数字留在旧格子上
+  if (state.lastFinals.length > Math.max(from, to)) {
+    const finals = state.lastFinals.slice();
+    const tmp = finals[from];
+    finals[from] = finals[to];
+    finals[to] = tmp;
+    state.lastFinals = finals;
+  }
+  state.swapUsed = true;
+  state.swapPending = false;
+  return { ok: true, message: '' };
+}
+
+/** 一次完整的旋转：停盘 → 结算（脚本与无换位装置时的快捷入口） */
+export function spin(state: GameState): void {
+  if (beginSpin(state) === 'blocked') return;
+  skipSwap(state);
+  resolveSpin(state);
+}
+
+/** 结算已经停下的这一转（道具全局效果 → 符号声明 → 收敛 → 落账） */
+export function resolveSpin(state: GameState): void {
+  if (state.over || state.won) return;
+  // 还在等玩家换位：结算必须排在那个窗口之后
+  if (state.swapPending) return;
 
   // 临时加成清零 → 道具全局效果 → 符号声明效果 → 结算（§4.5 / §5）
   // 道具先于符号：Items__Items.add_cond_effects() 把 effect 挂到目标符号，
@@ -528,6 +628,8 @@ export function spin(state: GameState): void {
     cell.destroyed = false;
     cell.removed = false;
     cell.appliedRules = new Set();
+    // 道具声明也会随销毁迭代重跑（祭坛/莫比乌斯环要等符号真的被摧毁），一起去重
+    cell.appliedItems = new Set();
   }
   // 细则 10/20/21/36 的「不可摧毁 / 不可移除」标记每转重算
   refreshTileFlags(state);
@@ -576,8 +678,9 @@ export function spin(state: GameState): void {
     },
   };
 
-  const itemRun = applyItemEffects(state.items, state.cells, effectCtx);
-  for (const id of itemRun.consumed) eat(id);
+  // 道具声明放进结算循环里跑：祭坛要等 organism 符号真的被摧毁，
+  // 莫比乌斯环也要等 box 组符号挂上 destroyed 才能补回棋盘。
+  // 循环内的重复应用由 cell.appliedItems 去重。
 
   // 细则 23：稀有度出现权重整体除以 values[0]（Main__Reels.gd:1942-1948）
   const fp23 = state.finePrints.find((fp) => fp.num === 23);
@@ -616,6 +719,9 @@ export function spin(state: GameState): void {
   };
 
   for (let pass = 0; pass < 6; pass += 1) {
+    // 道具先于符号：道具声明把 effect 挂到目标符号，符号自身的 add_effect 随后叠加
+    const itemRun = applyItemEffects(state.items, state.cells, effectCtx);
+    for (const id of itemRun.consumed) eat(id);
     applyEffects(state.cells, effectCtx);
     const spawned = drainSpawns();
     const pending = state.cells.filter((c) => c.tbd && !c.destroyed);
@@ -1354,50 +1460,12 @@ function onBoard(index: number): boolean {
   return Number.isInteger(index) && index >= 0 && index < CELL_COUNT;
 }
 
-/**
- * 拖拽重排：交换可视区任意两格（含空格）。
- *
- * 位置决定邻接乘算的落点，是玩家唯一能主动干预产出的手段（原版可以先用
- * 反手把乘数符号挪到中心格、再让邻居去吃它），所以这里做的是一次"互换"，
- * 而不是插入式位移：拖动只会改变两个格子的内容，不会挪动其他格子。
- *
- * 交换必须落到 `reels` 上：`cells` 只是 `reels` 的投影，下一轮旋转按
- * `reels` 洗牌，只改 `cells` 会在旋转时被打回原形。
- */
-export function moveSymbol(
-  state: GameState,
-  from: number,
-  to: number,
-): { ok: boolean; message: string } {
-  if (state.over || state.won) return { ok: false, message: '已结束' };
-  if (from === to) return { ok: false, message: '还是同一格' };
-  if (!onBoard(from) || !onBoard(to)) return { ok: false, message: '只能在本层棋盘的可见格里移动' };
-  const a = state.cells[from];
-  const b = state.cells[to];
-  if (!a || !b) return { ok: false, message: '格子已变动，请重试' };
-  if (!a.def && !b.def) return { ok: false, message: '两格都是空的' };
-
-  const ax = from % REELS_X;
-  const ay = Math.floor(from / REELS_X) + 1;
-  const bx = to % REELS_X;
-  const by = Math.floor(to / REELS_X) + 1;
-  state.reels[ax][ay] = b;
-  state.reels[bx][by] = a;
-
-  // 上一转的产出数字跟着符号走，否则数字会停在旧格子上误导玩家
-  if (state.lastFinals.length > Math.max(from, to)) {
-    const finals = state.lastFinals.slice();
-    const tmp = finals[from];
-    finals[from] = finals[to];
-    finals[to] = tmp;
-    state.lastFinals = finals;
-  }
-  // 协同明细挂的是格子下标，重排后失效，直接作废等下一轮重算
-  state.lastHits = [];
-
-  state.cells = visibleCells(state.reels);
-  return { ok: true, message: '' };
-}
+// 注意：这里**不提供**自由重排棋盘的入口。原版没有任何拖拽符号的实现
+// （脚本里没有 drag_and_drop / get_drag_data，输入层也只有 inspect /
+// enable_disable_item / confirm_select / deny_cancel），位置干预的唯一手段
+// 是 swapping_device 道具，见 swapSymbols：每转一次、只能动两个格子。
+// 交换必须落到 `reels` 上：`cells` 只是 `reels` 的投影，下一轮旋转按 `reels`
+// 洗牌，只改 `cells` 会在旋转时被打回原形。
 
 /**
  * 精华升级（essence_token）：把道具换成它的精华版本（essences.csv 的 `id_essence`）。
@@ -1538,6 +1606,104 @@ export function drawShop(state: GameState, paid: number, count: number): ShopCar
   return cards;
 }
 
+/**
+ * 一次性道具：买下的瞬间生效，不属于「持有期间」的声明，所以不写进 item_effects.csv。
+ * 逐条对应 Item__Item.gd:426-520 的 match type 分支，数量取自 items.csv 的 values。
+ * 未覆盖：devils_deal（补空位，values=66 远超棋盘容量）、dark_humor（改喜剧演员稀有度）、
+ * treasure_map（攒满才生成钥匙，走的是摧毁分支而不是购买分支）。
+ */
+function applyItemOnBuy(state: GameState, def: SymbolDef): void {
+  const v = def.values ?? [];
+  const added: string[] = [];
+  const put = (target: SymbolDef, n: number): void => {
+    let placed = 0;
+    for (let i = 0; i < n; i += 1) {
+      if (!placeSymbol(state, target)) break;
+      state.pool.push(target);
+      placed += 1;
+    }
+    if (placed > 0) added.push(`${symbolName(target.id)}×${placed}`);
+  };
+  /** 按稀有度抽一个符号；booster_pack 的 all_symbols_same 让多个副本共用同一张 */
+  const pick = (rarity: Rarity): SymbolDef | null => {
+    const pool = DRAWABLE_SYMBOLS.filter((s) => s.rarity === rarity);
+    return pool.length === 0 ? null : pool[Math.floor(state.rand() * pool.length)];
+  };
+  const pickGroup = (group: string): SymbolDef | null => {
+    const pool = DRAWABLE_SYMBOLS.filter((s) => s.groups.includes(group));
+    return pool.length === 0 ? null : pool[Math.floor(state.rand() * pool.length)];
+  };
+
+  switch (def.id) {
+    case 'barrel_o_dwarves':
+      put(symbol('dwarf'), v[0] ?? 0);
+      break;
+    case 'goldilocks':
+      put(symbol('bear'), v[0] ?? 0);
+      break;
+    case 'lunchbox': {
+      const s = pickGroup('food');
+      if (s) put(s, v[0] ?? 0);
+      break;
+    }
+    case 'adoption_papers': {
+      const s = pickGroup('animal');
+      if (s) put(s, v[0] ?? 0);
+      break;
+    }
+    case 'symbol_bomb_quantum': {
+      // forced_group "passed" 是动态组：Main__Main.gd:1470 把它设成 popup.passed，
+      // 也就是本转结算后仍留在盘上的符号；商店打开时棋盘正好停在这个状态
+      const onBoard = state.cells
+        .map((c) => c.def)
+        .filter((d): d is SymbolDef => Boolean(d));
+      for (let i = 0; i < (v[0] ?? 0); i += 1) {
+        if (onBoard.length === 0) break;
+        put(onBoard[Math.floor(state.rand() * onBoard.length)], 1);
+      }
+      break;
+    }
+    case 'symbol_bomb_small':
+    case 'symbol_bomb_big':
+    case 'symbol_bomb_very_big': {
+      // 源码 add_tile 不带条件：按当前稀有度表随机，逐个抽
+      for (let i = 0; i < (v[0] ?? 0); i += 1) {
+        const s = DRAWABLE_SYMBOLS[Math.floor(state.rand() * DRAWABLE_SYMBOLS.length)];
+        if (s) put(s, 1);
+      }
+      break;
+    }
+    case 'booster_pack': {
+      // values = [4, 3, 1]：4 个普通同种、3 个罕见同种、1 个稀有同种
+      const tiers: Array<[Rarity, number]> = [
+        ['common', v[0] ?? 0],
+        ['uncommon', v[1] ?? 0],
+        ['rare', v[2] ?? 0],
+      ];
+      for (const [rarity, n] of tiers) {
+        const s = pick(rarity);
+        if (s) put(s, n);
+      }
+      break;
+    }
+    case 'coffee':
+      // popup.rent_values[1] += 1：本期多给一次旋转，而不是加钱
+      state.spinsLeft += 1;
+      added.push('本期 +1 次旋转');
+      break;
+    default:
+      break;
+  }
+
+  if (added.length === 0) return;
+  state.cells = visibleCells(state.reels);
+  state.log.unshift({
+    turn: state.totalSpins,
+    kind: 'buy',
+    text: `${symbolName(def.id)} 生效：${added.join('、')}`,
+  });
+}
+
 export function buyFromShop(state: GameState, index: number): boolean {
   const card = state.shop[index];
   if (!card) return false;
@@ -1569,6 +1735,8 @@ export function buyFromShop(state: GameState, index: number): boolean {
       kind: 'buy',
       text: `获得道具 ${symbolName(card.def.id)}${held ? ` ×${held.count}` : ''}`,
     });
+    // 一次性道具在买下的这一刻就结算（生成符号 / 加旋转）
+    applyItemOnBuy(state, card.def);
     // 一次商店只能选一张（Pop-up__Pop-up.gd 的选项回调里直接关面板）
     // 第一件道具时补一封「道具栏怎么用」（原版邮件 kind：inventory）
     if (!hasMailKind(state, 'inventory')) addMail(state, inventoryMail(state.totalSpins));

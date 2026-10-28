@@ -180,6 +180,12 @@ export interface Cell {
   tbd?: boolean;
   /** 本轮已应用过的声明下标，多轮迭代时避免同一分支重复加分 */
   appliedRules?: Set<number>;
+  /**
+   * 本轮已应用过的道具声明（key = `道具 id#行号`）。
+   * 道具声明现在跟着销毁迭代一起重跑（莫比乌斯环要等符号真的被摧毁），
+   * 没有这层去重会每跑一遍就再加一次。
+   */
+  appliedItems?: Set<string>;
   /** 上一轮结算的产出，用于展示 */
   lastOutput: number;
 
