@@ -16,11 +16,11 @@ import { evaluateCell } from './value';
 import { RARITY_LABEL, emojiOf } from './sprites';
 import { FINE_PRINTS, ITEM_BY_ID, RENT_TABLE, SYMBOL_BY_ID } from './data';
 import { META } from './data';
-import { describeFinePrint, describeRule, itemGateNotes, rulesOf } from './effects';
+import { describeFinePrint, describeRule, rulesOf } from './effects';
 import { essenceLines, isEssence } from './essence-notes';
-import { ITEM_NOTES } from './item-notes';
+import { SELF_VALUE_NOTE, itemDesc } from './item-notes';
 import { groupList, literalName, symbolName } from './names';
-import { isItemUnimplemented, isUnimplemented } from './unimplemented';
+import { isUnimplemented } from './unimplemented';
 import { EGG_BY_ID } from './easter-eggs';
 
 export interface GameUi {
@@ -138,8 +138,8 @@ export function renderGame(game: GameState, ui: GameUi): string {
         <div class="coin-sub">${
           bossMode
             ? game.won
-              ? '房东已倒下'
-              : '持有 · 房东战照常付租'
+              ? '房东已击败'
+              : '持有 · 房东战期间照常付租'
             : cleared
               ? '租金已付清，可挑战房东'
               : `持有 / 本期租金 ${money(rent)}`
@@ -156,52 +156,52 @@ export function renderGame(game: GameState, ui: GameUi): string {
       <div class="hud-right">
       <div class="hud-row">
         <span class="chip chip-mode mode-${game.mode}">${MODE_CHIP[game.mode]}</span>
-        <span class="chip" title="开局楼层（current_floor），一局内固定">第 <b>${game.floor}</b> 层</span>
+        <span class="chip" title="开局时选定的楼层，本局内不变">第 <b>${game.floor}</b> 层</span>
         <span class="chip chip-period">${
           bossMode
             ? '房东战'
             : cleared
-              ? '12 期已通关'
+              ? '12 期已完成'
               : game.mode === 'normal'
                 ? `第 <b>${game.rentPaid + 1}</b> / 12 期`
                 : `第 <b>${game.rentPaid + 1}</b> 期`
         }</span>
         <span class="chip">旋转 <b>${game.spinsLeft}</b></span>
-        <span class="chip chip-pool" title="池中符号数 · 每转上盘概率">池 <b>${game.pool.length}</b> · 上盘 ${(hit * 100).toFixed(0)}%</span>
+        <span class="chip chip-pool" title="符号池大小与每转上盘概率">池 <b>${game.pool.length}</b> · 上盘 ${(hit * 100).toFixed(0)}%</span>
       </div>
       <div class="hud-row token-row">
-        <span class="token-chip" title="重掷代币：在商店里换一批候选（每次 ${game.rerollCost}）">${TOKEN_ICON.reroll} <b>${game.rerollTokens}</b></span>
+        <span class="token-chip" title="重掷代币：在商店中更换一批候选（每次 ${game.rerollCost} 枚）">${TOKEN_ICON.reroll} <b>${game.rerollTokens}</b></span>
         <button class="token-chip ${ui.removing ? 'active' : ''} ${game.removalTokens >= game.removalCost && !swapping ? '' : 'spent'}"
-          data-action="removal-mode" ${swapping ? 'disabled' : ''} title="移除代币：点这里再点一个符号把它删掉（每次 ${game.removalCost}）">
+          data-action="removal-mode" ${swapping ? 'disabled' : ''} title="移除代币：进入移除模式后点击符号删除（每次 ${game.removalCost} 枚）">
           ${TOKEN_ICON.removal} <b>${game.removalTokens}</b>
         </button>
-        <span class="token-chip" title="精华代币：把道具升级成精华版，付租时未用会作废">${TOKEN_ICON.essence} <b>${game.essenceTokens}</b></span>
-        <button class="chip chip-btn" data-action="deck" title="查看牌库里的全部符号">📚 牌库</button>
+        <span class="token-chip" title="精华代币：将道具升级为精华版，付租时未使用的部分不保留">${TOKEN_ICON.essence} <b>${game.essenceTokens}</b></span>
+        <button class="chip chip-btn" data-action="deck" title="查看符号池中的全部符号">📚 牌库</button>
         <button class="chip chip-btn ${game.finePrints.length > 0 ? 'fineprint-on' : ''}" data-action="fineprint"
-          title="细则：房东随租金上涨追加的永久修正">📜 细则 <b>${game.finePrints.length}</b></button>
+          title="细则：房东随租金上涨追加的全局修正">📜 细则 <b>${game.finePrints.length}</b></button>
         <button class="chip chip-btn mail-btn ${unread > 0 ? 'unread' : ''}" data-action="mailbox" title="房东来信">
           📬 信箱${unread > 0 ? ` <b>${unread}</b>` : ''}
         </button>
-        <button class="chip chip-btn" data-action="home" title="返回标题（未打完的对局会先确认）">🚪 主页</button>
-        <button class="chip chip-btn" data-action="tutorial" title="再看一遍玩法引导（三步）">❓ 引导</button>
+        <button class="chip chip-btn" data-action="home" title="返回标题页（进行中的对局会先确认）">🚪 主页</button>
+        <button class="chip chip-btn" data-action="tutorial" title="重新查看玩法引导（共三步）">❓ 引导</button>
       </div>
       <div class="hud-hint ${broke ? 'short' : ''}">
         ${
           game.swapPending
             ? ui.swapFrom === null
-              ? '🔀 交换装置：这一转可以交换两个符号的位置（每转一次），先点一个符号'
-              : `🔀 已选 ${slotLabel(game, ui.swapFrom)}，再点一格完成交换`
+              ? '🔀 交换装置：本转可交换两个符号的位置（每转一次），请先选择一个符号'
+              : `🔀 已选 ${slotLabel(game, ui.swapFrom)}，请再选择一格完成交换`
             : ui.removing
-            ? `移除模式：点棋盘上任意符号删掉它（每次 ${game.removalCost} 移除代币，再点🗑️ 取消）`
+            ? `移除模式：点击棋盘上任意符号将其删除（每次 ${game.removalCost} 枚移除代币；再次点击按钮取消）`
             : bossMode
             ? game.won
-              ? `房东已倒下，本局结束`
-              : `房东之战：每回合赚到的金币同时打在房东身上，租金照付`
+              ? '房东已击败，本局结束'
+              : '房东之战：每转产出的金币同时计入对房东的伤害，租金仍需照付'
             : cleared
-              ? `12 期租金全部付清 · 现在可以去挑战房东`
+              ? '12 期租金已全部付清，可挑战房东'
               : broke
-                ? `本期累计 ${money(game.roundEarned)}，还差 ${money(shortfall)}，旋转已用尽`
-                : `本期累计 ${money(game.roundEarned)} · 还差 ${money(shortfall)}`
+                ? `本期累计 ${money(game.roundEarned)}，尚差 ${money(shortfall)}；旋转次数已用尽`
+                : `本期累计 ${money(game.roundEarned)} · 尚差 ${money(shortfall)}`
         }
       </div>
       </div>
@@ -222,7 +222,7 @@ export function renderGame(game: GameState, ui: GameUi): string {
           ? `<button class="ghost-btn swap-skip" data-action="swap-skip">不换位，继续结算</button>`
           : ended
           ? `<button class="big-btn danger" data-action="reset">${
-              game.won ? (game.boss ? '🏆 击败房东 · 再来一局' : '🎉 已通关 · 再来一局') : '💀 破产 · 重新开始'
+              game.won ? (game.boss ? '🏆 击败房东 · 开始新对局' : '🎉 已通关 · 开始新对局') : '💀 破产 · 重新开始'
             }</button>`
           : game.spinsLeft > 0
             ? `<button class="big-btn ${canSpin ? '' : 'busy'}" data-action="spin" ${canSpin ? '' : 'disabled'}>
@@ -274,7 +274,7 @@ const MODE_CHIP: Record<GameState['mode'], string> = {
 /** 道具栏：原版在主界面常驻，购买的道具按堆叠层数展示 */
 function renderBag(game: GameState): string {
   if (game.items.length === 0) {
-    return `<div class="bag empty"><span class="bag-label">道具栏</span><span class="bag-none">还没有道具，付租或旋转奖励里能买到</span></div>`;
+    return `<div class="bag empty"><span class="bag-label">道具栏</span><span class="bag-none">尚未持有道具，可在付租后或旋转奖励中获得</span></div>`;
   }
   const total = game.items.reduce((n, it) => n + it.count, 0);
   const slots = game.items
@@ -298,9 +298,9 @@ function renderItemDetail(game: GameState, id: string): string {
   const eaten = held.itemValue ?? 0;
   const shownValue = held.value ?? def.value + eaten;
   const notes: string[] = [];
-  if (held.value) notes.push('细则修正');
-  if (eaten) notes.push(`吃掉符号 +${eaten}`);
-  if (held.savedValue) notes.push(`攒下 ${held.savedValue}`);
+  if (held.value) notes.push('含细则修正');
+  if (eaten) notes.push(`移除符号累计 +${eaten}`);
+  if (held.savedValue) notes.push(`累积 ${held.savedValue}`);
   const valueNote = notes.length > 0 ? ` · ${notes.join('，')}` : '';
   return `
   <div class="overlay" data-action="close-item">
@@ -318,11 +318,11 @@ function renderItemDetail(game: GameState, id: string): string {
       ${
         canEssenceUpgrade(game, id)
           ? `<button class="ghost-btn essence-up" data-action="essence" data-id="${id}">
-               ${TOKEN_ICON.essence} 精华化 · 换成精华版（剩 ${game.essenceTokens}）
+               ${TOKEN_ICON.essence} 精华化 · 升级为精华版（剩余 ${game.essenceTokens} 枚）
              </button>`
           : ''
       }
-      <p class="muted small" style="margin-top:12px">道具不占棋盘格，效果作用于全场符号</p>
+      <p class="muted small" style="margin-top:12px">道具不占棋盘格，效果作用于全场符号；道具自身价值不计入每转产出</p>
     </div>
   </div>`;
 }
@@ -405,7 +405,7 @@ function renderShop(game: GameState): string {
           <span class="offer-name">${name}</span>
           <span class="offer-val"><small>值</small>${val}</span>
         </button>
-        ${token ? '' : `<button class="offer-peek" data-action="peek" data-index="${i}" title="查看定义" aria-label="查看定义"><span class="offer-peek-dot">?</span></button>`}
+        ${token ? '' : `<button class="offer-peek" data-action="peek" data-index="${i}" title="查看详情" aria-label="查看详情"><span class="offer-peek-dot">?</span></button>`}
       </div>`;
     })
     .join('');
@@ -426,9 +426,9 @@ function renderShop(game: GameState): string {
         <button class="ghost-btn reroll" data-action="reroll" ${
           game.rerollTokens >= game.rerollCost ? '' : 'disabled'
         }>
-          ${TOKEN_ICON.reroll} 重掷（${game.rerollCost}）· 剩 ${game.rerollTokens}
+          ${TOKEN_ICON.reroll} 重掷 · 消耗 ${game.rerollCost} 枚（剩余 ${game.rerollTokens} 枚）
         </button>
-        <button class="ghost-btn" data-action="skip">跳过本次</button>
+        <button class="ghost-btn" data-action="skip">放弃本次奖励</button>
       </div>
     </div>
   </div>`;
@@ -438,9 +438,23 @@ function renderShop(game: GameState): string {
 function renderPeek(game: GameState, index: number): string {
   const card = game.shop[index];
   if (!card) return '';
-  const n = game.pool.length;
-  const hitNow = Math.min(CELL_COUNT, n) / n;
-  const hitAfter = Math.min(CELL_COUNT, n + 1) / (n + 1);
+  // 道具不进符号池、也不占棋盘格，「符号池 / 上盘比例 / 单格期望」对它没有意义
+  const isItem = ITEM_BY_ID.has(card.def.id);
+  let stats = '';
+  if (!isItem) {
+    const n = game.pool.length;
+    const hitNow = Math.min(CELL_COUNT, n) / n;
+    const hitAfter = Math.min(CELL_COUNT, n + 1) / (n + 1);
+    stats = `
+      <table class="data">
+        <tbody>
+          <tr><td>基础值</td><td class="num">${card.def.value}</td></tr>
+          <tr><td>符号池</td><td class="num">${n} → ${n + 1}</td></tr>
+          <tr><td>上盘比例</td><td class="num">${(hitNow * 100).toFixed(0)}% → ${(hitAfter * 100).toFixed(0)}%</td></tr>
+          <tr><td>单格期望</td><td class="num">${(hitAfter * card.def.value).toFixed(2)}</td></tr>
+        </tbody>
+      </table>`;
+  }
 
   return `
   <div class="overlay peek-overlay" data-action="close-peek">
@@ -449,19 +463,12 @@ function renderPeek(game: GameState, index: number): string {
         <div class="detail-face">${emojiOf(card.def)}</div>
         <div>
           <h2>${symbolName(card.def.id)}</h2>
-          <p class="muted small">${RARITY_LABEL[card.rarity] ?? card.rarity} · ${groupList(card.def.groups)}</p>
+          <p class="muted small">${RARITY_LABEL[card.rarity] ?? card.rarity}${isItem ? ' · 道具' : ` · ${groupList(card.def.groups)}`}</p>
         </div>
         <div class="detail-total">${card.def.value}</div>
         <button class="icon-btn" data-action="close-peek">✕</button>
       </div>
-      <table class="data">
-        <tbody>
-          <tr><td>基础值</td><td class="num">${card.def.value}</td></tr>
-          <tr><td>符号池</td><td class="num">${n} → ${n + 1}</td></tr>
-          <tr><td>上盘比例</td><td class="num">${(hitNow * 100).toFixed(0)}% → ${(hitAfter * 100).toFixed(0)}%</td></tr>
-          <tr><td>单格期望</td><td class="num">${(hitAfter * card.def.value).toFixed(2)}</td></tr>
-        </tbody>
-      </table>
+      ${stats}
       ${renderDeclarations(card.def.id)}
     </div>
   </div>`;
@@ -528,17 +535,55 @@ function mergeSameCondition(texts: string[]): string[] {
   return out;
 }
 
+/**
+ * 道具说明：一段「触发条件 → 效果」的对照列表。
+ * 道具不占格、作用于全场，复用符号那套渲染会说出「本符号…」「相邻的…」这类错话，
+ * 所以道具走 item-notes.ts 的专用文案（数值仍从 items.csv 取）。
+ */
+function renderItemDeclarations(id: string): string {
+  const desc = itemDesc(id);
+  const head = `<div class="decl-head">${symbolName(id)} <span class="muted small">${literalName(id)}</span></div>`;
+  if (!desc) {
+    return `
+      <div class="decls">
+        ${head}
+        <p class="decl-warn">⚠ 这件道具还没有说明文案</p>
+      </div>`;
+  }
+  // 效果缺口的说明由 item-notes.ts 的 gap 统一给出，这里不再重复一遍
+  const rows = desc.lines
+    .map(
+      (line) => `<div class="decl">
+        <div class="decl-when">${line.when}</div>
+        <div class="decl-do">${line.effect}</div>
+      </div>`,
+    )
+    .join('');
+  // 「只改自身价值」的道具统一提示一次，避免逐条重复写「没有收益」
+  const selfNote = desc.selfValueOnly ? `<p class="decl-gap">${SELF_VALUE_NOTE}</p>` : '';
+  const gap = desc.gap ? `<p class="decl-gap">${desc.gap}</p>` : '';
+  const empty = rows ? '' : '<p class="note small"><b>无特效</b></p>';
+  return `
+      <div class="decls">
+        ${head}
+        <p class="decl-summary">${desc.summary}</p>
+        ${rows}${empty}
+        ${selfNote}
+        ${gap}
+      </div>`;
+}
+
 /** 该符号在玩法里的效果，用玩家能读懂的话写；没有可展示的效果就写「无特效」 */
 function renderDeclarations(id: string): string {
+  // 道具与符号是两套语义（不占格、作用于全场），不能共用同一段生成逻辑
+  if (ITEM_BY_ID.has(id)) return renderItemDeclarations(id);
   const def = SYMBOL_BY_ID.get(id) ?? null;
   const owner = def ? { id: def.id, values: def.values ?? [] } : undefined;
   const head = `<div class="decl-head">${symbolName(id)} <span class="muted small">${literalName(id)}</span></div>`;
   // 玩法还没补全的符号要明说，否则玩家会以为自己漏看了什么机制
   const warn = isUnimplemented(id)
     ? `<p class="decl-warn">⚠ 这张的玩法还在补：目前只有基础值，暂时不会出现在商店里</p>`
-    : isItemUnimplemented(id)
-      ? `<p class="decl-warn">⚠ 这件道具的效果还没还原：买下只得到它的数值，不触发任何结算</p>`
-      : '';
+    : '';
   // 精华走自己的措辞：数据里是「触发→销毁自己」+「销毁→永久加成」两条技术声明，
   // 通用渲染会读成「被其他符号触发过时，摧毁自己」，玩家看不出它强化了什么
   if (isEssence(id)) {
@@ -553,26 +598,9 @@ function renderDeclarations(id: string): string {
       </div>`;
   }
   const texts: string[] = [];
-  // 一次性道具的效果写在购买瞬间，没有可渲染的声明，用固定说明补上
-  const note = ITEM_NOTES[id];
-  if (note) texts.push(note);
   for (const rule of rulesOf(id)) {
     const text = describeRule(rule, owner);
     if (text && !texts.includes(text)) texts.push(text);
-  }
-  // 有些道具自身没有声明，功能全写在别的符号里（幸运猫改猫的稀有度、第五张 A 加成花色）
-  if (ITEM_BY_ID.has(id)) {
-    const byOwner = new Map<string, string[]>();
-    for (const gate of itemGateNotes(id)) {
-      const arr = byOwner.get(gate.owner) ?? [];
-      if (!arr.includes(gate.text)) arr.push(gate.text);
-      byOwner.set(gate.owner, arr);
-    }
-    for (const [ownerId, arr] of byOwner) {
-      // 规则的 symbol 可能是 clubs|spades 这样的多归属写法，逐个译名
-      const names = ownerId.split('|').map((x) => symbolName(x)).join('、');
-      texts.push(`此外还影响${names}：${arr.join('；')}`);
-    }
   }
   const merged = mergeSameCondition(texts);
   if (texts.length === 0) {
@@ -611,9 +639,9 @@ function renderDeck(game: GameState): string {
     <div class="sheet" data-stop="1">
       <div class="sheet-head">
         <h2>牌库 · ${total} 个符号</h2>
-        <p class="muted small">池里的符号全部参与洗牌，上盘比例 ${Math.min(CELL_COUNT, total) ? ((Math.min(CELL_COUNT, total) / Math.max(1, total)) * 100).toFixed(0) : 0}%</p>
+        <p class="muted small">符号池中的符号全部参与洗牌，每转上盘比例 ${Math.min(CELL_COUNT, total) ? ((Math.min(CELL_COUNT, total) / Math.max(1, total)) * 100).toFixed(0) : 0}%</p>
       </div>
-      <div class="deck-list">${rows || '<p class="muted small">池是空的</p>'}</div>
+      <div class="deck-list">${rows || '<p class="muted small">符号池为空</p>'}</div>
       <button class="ghost-btn" data-action="close-deck">关闭</button>
     </div>
   </div>`;
@@ -642,7 +670,7 @@ function renderFinePrints(game: GameState): string {
         <ul class="fp-lines">${
           lines.length > 0
             ? lines.map((l) => `<li>${l}</li>`).join('')
-            : '<li class="muted small">这条细则在本局不影响任何符号</li>'
+            : '<li class="muted small">本条细则不影响当前棋面上的任何符号</li>'
         }</ul>
       </article>`;
     })
@@ -655,7 +683,7 @@ function renderFinePrints(game: GameState): string {
       <div class="analysis-head">
         <div>
           <h2>📜 细则 · ${game.finePrints.length} 条</h2>
-          <p class="muted small">房东战里每打掉一截血就追加一条，越往后越狠；每条只出现一次</p>
+          <p class="muted small">房东战期间每累计一定伤害追加一条，越往后越严格；每条只出现一次</p>
         </div>
         <button class="icon-btn" data-action="close-fineprint">✕</button>
       </div>
@@ -664,7 +692,7 @@ function renderFinePrints(game: GameState): string {
         <span>再打掉 ${next} 点血触发下一条 · 每 ${game.finePrintThreshold} 点伤害一条</span>
       </div>
       <div class="fp-list">${
-        cards || '<p class="muted small">这一局还没吃到细则。房东战里打掉的血会累积，够数就追加一条。</p>'
+        cards || '<p class="muted small">本局尚未获得细则。房东战期间造成的伤害会累积，达到阈值即追加一条。</p>'
       }</div>
       <button class="ghost-btn" data-action="close-fineprint">关闭</button>
     </div>
@@ -719,7 +747,7 @@ function renderMailbox(game: GameState, ui: GameUi): string {
           ? `<div class="mail-tools"><button class="ghost-btn" data-action="mail-all">全部标记已读</button></div>`
           : ''
       }
-      <div class="mail-list">${cards || '<p class="muted small">还没有来信。付租、拿到代币或破产时，这里会收到信。</p>'}</div>
+      <div class="mail-list">${cards || '<p class="muted small">暂无来信。付租、获得代币或结束对局时会收到信件。</p>'}</div>
     </div>
   </div>`;
 }

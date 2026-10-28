@@ -1362,12 +1362,11 @@ export function effectCoverage(): EffectCoverage {
   };
 }
 
-/** 符号的全部声明（拆解面板用） */
 /**
  * 反向索引：哪些符号的声明把这个道具当作前置条件（when:item:X / no_item:X）。
  *
- * 有些道具自身没有任何声明（幸运猫、第五张 A、扎罗夫的契约），功能全部体现在
- * 别的符号的声明里；只按自身声明渲染，卡片就会显示「无特效」，这是错的。
+ * 道具详情面板已改用 `item-notes.ts` 的专用文案（「条件 + 效果」两列），
+ * 不再需要把别的符号的句子拼进来；这里保留给分析脚本与自查使用。
  */
 export function itemGateNotes(id: string): Array<{ owner: string; text: string }> {
   const out: Array<{ owner: string; text: string }> = [];
@@ -1764,11 +1763,19 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       const label = typeof who === 'string' ? symbolName(who) : '同类符号';
       const n = fmtValue(cmp.b as EffectValue, owner);
       out.onlyType = false;
-      if (cmp.greater_than !== undefined) out.extras.push(n === '0' ? `场上有${label}` : `场上有超过 ${n} 个${label}`);
-      else if (cmp.greater_than_eq) out.extras.push(`场上有 ${n} 个以上${label}`);
-      else if (cmp.less_than !== undefined) out.extras.push(`场上不到 ${n} 个${label}`);
-      else if (cmp.less_than_eq) out.extras.push(`场上至多 ${n} 个${label}`);
-      else out.extras.push(`场上正好 ${n} 个${label}`);
+      // 阈值可能来自表达式（红宝石/祖母绿是「自身面板值」），
+      // 直接嵌进「场上有 N 个以上」会变成「场上有 自身面板值 个以上」
+      const numeric = isNumeric(n);
+      const qty = numeric ? `${n} 个` : n;
+      const cmpText = (): string => {
+        if (!numeric) return `场上${label}数量达到 ${n}`;
+        if (cmp.greater_than !== undefined) return n === '0' ? `场上有${label}` : `场上有超过 ${qty}${label}`;
+        if (cmp.greater_than_eq) return `场上有 ${qty}以上${label}`;
+        if (cmp.less_than !== undefined) return `场上不到 ${qty}${label}`;
+        if (cmp.less_than_eq) return `场上至多 ${qty}${label}`;
+        return `场上正好 ${qty}${label}`;
+      };
+      out.extras.push(cmpText());
       continue;
     }
     // tbd 是「已判定要摧毁、等本转走完」的内部标记，玩家不需要看到
@@ -1800,7 +1807,7 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       continue;
     }
     if (key === 'indestructible') {
-      out.extras.push(cmp.b ? '打不碎' : '能被打碎');
+      out.extras.push(cmp.b ? '不可被摧毁' : '可以被摧毁');
       continue;
     }
     // 随机阈值（rand:true）：源码判定是「值 ≥ rand_range(0,100)」，
@@ -1820,7 +1827,8 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       }
     }
     if (key === 'values' || key === 'value' || key === 'value_bonus') {
-      out.extras.push(`数值${opText(cmp)}${fmtValue(cmp.b, owner)}`);
+      // 比较运算符两侧留空格，和中英混排的其余文案保持一致
+      out.extras.push(`数值 ${opText(cmp)} ${fmtValue(cmp.b, owner)}`);
       continue;
     }
     if (key === 'times_displayed') {
@@ -1828,7 +1836,7 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       out.extras.push(
         cmp.b && typeof cmp.b === 'object'
           ? '出现次数攒够'
-          : `已出现${opText(cmp)}${fmtValue(cmp.b, owner)}次`,
+          : `已出现 ${opText(cmp)} ${fmtValue(cmp.b, owner)} 次`,
       );
       continue;
     }
@@ -1836,12 +1844,14 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       out.extras.push(
         cmp.b && typeof cmp.b === 'object'
           ? '给币次数攒够'
-          : `已给币${opText(cmp)}${fmtValue(cmp.b, owner)}次`,
+          : `已给币 ${opText(cmp)} ${fmtValue(cmp.b, owner)} 次`,
       );
       continue;
     }
     if (key === 'saved_value') {
-      out.extras.push(`已积累${opText(cmp)}${fmtValue(cmp.b, owner)}`);
+      // 结尾留空格：这句后面可能直接接「且…」（「已积累 ≥ 5 且可以被摧毁」），
+      // 不留空格会把数字和汉字黏在一起
+      out.extras.push(`已积累 ${opText(cmp)} ${fmtValue(cmp.b, owner)} `);
       continue;
     }
     if (key === 'symbol_trigger') {
@@ -1864,6 +1874,13 @@ function opText(cmp: EffectComparison): string {
 /** 动作型属性：句子用「摧毁 / 变成」这类动词，不接数值 */
 const VERB_VTC = new Set(['destroyed', 'removed', 'wildcarded', 'type', 'drained', 'indestructible']);
 
+/**
+ * 需要「改为」系词的状态型属性。
+ * 只收「形容词式」的效果文案：不可被摧毁 / 被吸干。
+ * `type` / `wildcarded` 的文案自带动词（变成钻石 / 变成万能符号），再加会得到「改为变成」。
+ */
+const STATE_VTC = new Set(['indestructible', 'drained']);
+
 /** 数值写法：负数原样带符号，整句（每出现一次 +2）不加号，其余补 + */
 function amountText(d: string): string {
   if (/^[+\-]/.test(d) || /^[^0-9.]/.test(d)) return d;
@@ -1875,17 +1892,95 @@ function isNumeric(d: string): boolean {
   return /^[-+]?\d/.test(d);
 }
 
-/** 给数值补一个单位；整句时不留空格（「数值每出现一次 +2」） */
-function unitText(unit: string, d: string): string {
-  const a = amountText(d);
-  if (/^[0-9+\-]/.test(a)) return `${unit} ${a}`;
-  // 文案型来源（面板数值、对方的数值、随机值…）不能直接贴上去，接成「数值 + 面板数值」
-  return `${unit} + ${d}`;
+/**
+ * 「按某个频率递增」的描述，如 `每持有一个扎罗夫契约 +20`、`每出现一次 +4`。
+ * 它不是数值，直接拼到「数值 +」后面会断成
+ * 「数值 + 每持有一个扎罗夫契约 +20」，读不出是「每层递增」。
+ * 这里把它拆成「每次的量」+「计次单位」，统一改写成「数值 +20（每个扎罗夫契约）」。
+ */
+interface Rate {
+  /** 计次单位：每个扎罗夫契约 / 每次出现 / 每点积累 */
+  per: string;
+  /** 每次的量，已带运算符：+20 / ×3 */
+  amount: string;
 }
 
-/** 倍率写法：数字直接乘，文案型来源套括号，避免「×面板数值」这种半截话 */
+const RATE_PATTERNS: Array<{
+  re: RegExp;
+  per: (m: RegExpMatchArray) => string;
+  amount: (m: RegExpMatchArray) => string;
+}> = [
+  // 每持有一个X就加一次 / 每持有一个X就 ×3 / 每持有一个X +20
+  { re: /^每持有一个(.+?)\s*就\s*加一次$/, per: (m) => `每个${m[1]}`, amount: () => '+1' },
+  { re: /^每持有一个(.+?)\s*就\s*([+\-×][\d.]+)$/, per: (m) => `每个${m[1]}`, amount: (m) => m[2] },
+  { re: /^每持有一个(.+?)\s+([+\-][\d.]+)$/, per: (m) => `每个${m[1]}`, amount: (m) => m[2] },
+  // 每有一个X就加一次 / 每场上有一个X +N
+  { re: /^每有一个(.+?)\s*就加一次$/, per: (m) => `每个${m[1]}`, amount: () => '+1' },
+  { re: /^每场上有一个(.+?)\s*就加一次$/, per: (m) => `每个${m[1]}`, amount: () => '+1' },
+  { re: /^每场上有一个(.+?)\s+([+\-][\d.]+)$/, per: (m) => `每个${m[1]}`, amount: (m) => m[2] },
+  // 每出现一次 +N
+  { re: /^每出现一次\s*就加一次$/, per: () => '每次出现', amount: () => '+1' },
+  { re: /^每出现一次\s+([+\-][\d.]+)$/, per: () => '每次出现', amount: (m) => m[1] },
+  // 每点积累 +N
+  { re: /^每点积累\s*加一次$/, per: () => '每点积累', amount: () => '+1' },
+  { re: /^每点积累\s+([+\-][\d.]+)$/, per: () => '每点积累', amount: (m) => m[1] },
+  // 每块化石 +N
+  { re: /^每块化石\s*就加一次$/, per: () => '每块化石', amount: () => '+1' },
+  { re: /^每块化石\s+([+\-][\d.]+)$/, per: () => '每块化石', amount: (m) => m[1] },
+  // 每持有一个就 +N（没有点名是哪件道具）
+  { re: /^每持有一个就\s*([+\-][\d.]+)$/, per: () => '每持有一层', amount: (m) => m[1] },
+];
+
+function parseRate(d: string): Rate | null {
+  for (const p of RATE_PATTERNS) {
+    const m = p.re.exec(d);
+    if (m) return { per: p.per(m), amount: p.amount(m) };
+  }
+  return null;
+}
+
+/**
+ * 描述型数值来源 → 能直接读的动词短语。
+ * 「数值 + 对方的数值」要玩家自己断句，一律改成「数值增加对方的数值」。
+ */
+const VALUE_SOURCE: Array<{ re: RegExp; phrase: (m: RegExpMatchArray) => string }> = [
+  // 句子的主语已经是本符号，再写「本符号数值等于本符号的面板值」会重复主语。
+  // 统一收成「变为自身 X」，由调用方决定前面接不接主语。
+  { re: /^本符号数值（面板值）$/, phrase: () => '变为自身面板值' },
+  { re: /^本符号的数值$/, phrase: () => '变为自身当前值' },
+  { re: /^本符号数值$/, phrase: () => '变为自身当前值' },
+  { re: /^对方的数值$/, phrase: () => '增加对方的数值' },
+  { re: /^细则加成$/, phrase: () => '增加细则给出的数值' },
+  { re: /^随机数$/, phrase: () => '增加 0–100 的随机值' },
+  { re: /^相邻格数$/, phrase: () => '增加相邻格数' },
+  { re: /^随局面变化$/, phrase: () => '随局面变化' },
+];
+
+/** 给数值补一个单位；递增描述改写成「数值 +20（每个 X）」 */
+function unitText(unit: string, d: string): string {
+  const rate = parseRate(d);
+  if (rate) return `${unit} ${rate.amount}（${rate.per}）`;
+  const a = amountText(d);
+  if (/^[0-9+\-]/.test(a)) return `${unit} ${a}`;
+  for (const src of VALUE_SOURCE) {
+    const m = src.re.exec(d);
+    if (m) return `${unit}${src.phrase(m)}`;
+  }
+  // 递增描述（「每块化石 +1」）：把它放到「（每…）」里，主语仍是本符号
+  const rateLike = parseRate(`每${d.replace(/^每/, '')}`);
+  if (rateLike && /^每/.test(d)) return `${unit}${rateLike.amount}（${rateLike.per}）`;
+  // 其余量词型来源也走「增加…」，不再产出「数值 + 什么」的半截话
+  return `${unit}增加${d}`;
+}
+
+/** 倍率写法：数字直接乘，递增描述改写成「倍率 ×3（每个 X）」，其余用「乘以」避开半截话 */
 function timesText(unit: string, d: string): string {
-  return isNumeric(d) ? `${unit} ×${d}` : `${unit} ×（${d}）`;
+  const rate = parseRate(d);
+  if (rate) return `${unit} ${rate.amount}（${rate.per}）`;
+  if (isNumeric(d)) return `${unit} ×${d}`;
+  // 「乘以按胶囊机倍率放大」是双重介词，改写成「按…放大」
+  if (/^按/.test(d)) return `${unit}${d}`;
+  return `${unit}乘以${d}`;
 }
 
 /** 计数型数值加成：diff 直接就是「场上某符号的个数」 */
@@ -1925,7 +2020,8 @@ function effectText(rule: EffectRule, owner?: Owner): string {
   if (vtc === 'removed') return '移除';
   if (vtc === 'wildcarded') return '变成万能符号';
   if (vtc === 'drained') return '被吸干';
-  if (vtc === 'indestructible') return '打不碎';
+  // 「打不碎」是口语；统一用机制名「不可被摧毁」
+  if (vtc === 'indestructible') return '不可被摧毁';
 
   // diff 由「被作用符号的某个槽位 × 系数」在运行时算出（矮人吃了亲矮人拿它的数值）
   if (rule.diff === null && rule.flags.some((f) => f.startsWith('diffkey:'))) {
@@ -1953,17 +2049,28 @@ function effectText(rule: EffectRule, owner?: Owner): string {
   }
 
   const d = fmtValue(rule.diff, owner);
+  /**
+   * overwrite 是「直接改成某个值」，不是加减。
+   * 但这里的 d 可能是描述型来源（「本符号数值（面板值）」），
+   * 直接拼会得到「数值变为 本符号数值（面板值）」——同一句里两个主语。
+   */
+  const overwriteText = (): string => {
+    const src = VALUE_SOURCE.find((s) => s.re.test(d));
+    if (src) return `数值${src.phrase(d.match(src.re)!)}`;
+    // 递增描述（诡秘之兽「每块化石 +1」）走与加法相同的量词映射，空格也保持一致
+    const rate = parseRate(d);
+    if (rate) return `数值 ${rate.amount}（${rate.per}）`;
+    return `数值变为 ${d}`;
+  };
   switch (vtc) {
     case 'value':
       if (!d) return '数值改变';
-      // overwrite 是「直接改成这个数」，否则是在原值上加减
-      return rule.flags.includes('overwrite') ? `数值变为 ${d}` : unitText('数值', d);
+      return rule.flags.includes('overwrite') ? overwriteText() : unitText('数值', d);
     case 'flat_value_bonus':
       return d ? unitText('固定', d) : '固定加成';
     case 'value_bonus':
       if (!d) return '数值上升';
-      // overwrite 表示直接把数值换成这个数（重摇精华这类）
-      return rule.flags.includes('overwrite') ? `数值变为 ${d}` : unitText('数值', d);
+      return rule.flags.includes('overwrite') ? overwriteText() : unitText('数值', d);
     case 'permanent_bonus':
       return d ? unitText('永久', d) : '永久上升';
     case 'permanent_bonuses': {
@@ -1977,9 +2084,10 @@ function effectText(rule: EffectRule, owner?: Owner): string {
             ? symbolName(spec.type)
             : '符号';
       const mul = fmtValue(spec.multiplier as EffectValue, owner);
-      if (mul) return `所有${who} ×${mul}`;
+      // ×1 等于没改，说「×1」只会让人以为有增益
+      if (mul && Number(mul) !== 1) return `所有${who}的永久倍率 ×${mul}`;
       const add = fmtValue(spec.bonus as EffectValue, owner);
-      return add ? `所有${who} +${add}` : `所有${who}永久提升`;
+      return add ? `所有${who}数值 +${add}` : `所有${who}永久提升`;
     }
     case 'value_multiplier':
       return d ? timesText('本轮倍率', d) : '本轮倍率上升';
@@ -2020,9 +2128,11 @@ function gateText(rule: EffectRule): string {
     else if (gate.kind === 'any_item') anyHolds.push(gate.keys.map((k) => symbolName(k)).join('或'));
   }
   const parts: string[] = [];
-  if (holds.length > 0) parts.push(`持有${holds.join('、')}`);
-  if (anyHolds.length > 0) parts.push(`持有${anyHolds.join('、')}`);
-  if (lacks.length > 0) parts.push(`没持有${lacks.join('、')}`);
+  // 道具名之间用「和」：外层还要与「本符号被摧毁」等前提并列，
+  // 内部若也用顿号会读成「没持有A、B、给币次数攒够」，分不清哪些是道具名。
+  if (holds.length > 0) parts.push(`持有${holds.join('和')}`);
+  if (anyHolds.length > 0) parts.push(`持有${anyHolds.join('和')}`);
+  if (lacks.length > 0) parts.push(`没持有${lacks.join('和')}`);
   return parts.join('且');
 }
 
@@ -2032,7 +2142,25 @@ function consumeText(rule: EffectRule): string {
   return ids.length > 0 ? `（消耗${ids.map((id) => symbolName(id)).join('、')}）` : '';
 }
 
-/** 把一条声明渲染成玩家能读懂的一句话；返回空串表示这条不值得展示 */
+/**
+ * 把一条声明渲染成玩家能读懂的一句话；返回空串表示这条不值得展示。
+ *
+ * 一条声明可能同时有「持有物门控」和「符号自身状态」两层前提，
+ * 外层若各自补一个「时」会断成
+ * 「持有扎罗夫契约时，本符号被摧毁时，数值 +20」——玩家要自己判断层级。
+ * 这里把两层前提合成一句，只保留一个「时」。
+ */
+/**
+ * 中英文之间补一个空格（中文排版惯例）。
+ * 符号名里含拉丁字母时（「X 光机」「第五张 A」）会紧贴住「时」「和」这类汉字，
+ * 在句子里读起来像半个词。统一在出口补，避免每个拼接点各写一遍。
+ */
+function spaceCJK(text: string): string {
+  return text
+    .replace(/([A-Za-z0-9\]])([\u4e00-\u9fff])/g, '$1 $2')
+    .replace(/([\u4e00-\u9fff])([A-Za-z0-9\[])/g, '$1 $2');
+}
+
 export function describeRule(rule: EffectRule, owner?: Owner): string {
   const body = describeRuleBody(rule, owner);
   // tiles_to_add 的语义是「往棋盘里塞一个新符号」，和数值改动可以同时存在
@@ -2045,30 +2173,49 @@ export function describeRule(rule: EffectRule, owner?: Owner): string {
         : `${body}，并${spawn}`
       : body || spawn;
   if (!core) return '';
-  const gate = gateText(rule);
   const eat = consumeText(rule);
-  return gate ? `${gate}时，${core}${eat}` : `${core}${eat}`;
+  const gate = gateText(rule);
+  // body 以「…时，」开头说明它自己带了前置条件。两层各自补一个「时」会断成
+  // 「持有扎罗夫契约时，本符号被摧毁时，…」，读者要自己判断层级；
+  // 合并成一句、只保留句末一个「时」。
+  // 用「，」分隔：门控内部已用「和」列道具名、「且」连接不同类型的前提，
+  // 这里再用「，」才是清晰的三级层次（门控内 → 两层前提之间 → 效果）。
+  const inner = /^(.*?)时，/.exec(core);
+  const text =
+    gate && inner
+      ? `${gate}，${inner[1]}时，${core.slice(inner[0].length)}${eat}`
+      : gate
+        ? `${gate}时，${core}${eat}`
+        : `${core}${eat}`;
+  return spaceCJK(text);
 }
 
-/** 生成声明的文案：`生成 1 个🐝蜂蜜(Honey)` / `生成 2 个宝石类符号` */
+/** 生成声明的文案：`生成 1 个蜂蜜` / `生成 2 个宝石类符号` */
 function spawnTextOf(rule: EffectRule): string {
   if (!rule.spawn || rule.spawn.length === 0) return '';
   const parts = rule.spawn.map((spec) => {
-    const what =
-      spec.type === 'prev_destroyed_symbol'
-        ? '本转被摧毁的符号'
-        : spec.type
-          ? symbolName(spec.type)
-          : spec.group
-            ? `${groupName(spec.group)}符号`
-            : '符号';
-    // count 可能写成表达式（源码里允许 values[N]），说不清时就不编数字
-    const count = typeof spec.count === 'number' ? spec.count : null;
-    return count === null ? `若干${what}` : `${count} 个${what}`;
+    // current_type / prev_destroyed_symbol 是执行期占位符（「刚被摧毁的那个符号」），
+    // 译名表里没有它们，直接交给 symbolName 会渲染成 "Current Type"
+    const isPlaceholder = spec.type === 'prev_destroyed_symbol' || spec.type === 'current_type';
+    const what = isPlaceholder
+      ? '刚被摧毁的符号'
+      : spec.type
+        ? symbolName(spec.type)
+        : spec.group
+          ? `${groupName(spec.group)}符号`
+          : '符号';
+    // count 可能写成表达式（values[N] / item_count），具体数字要到执行期才知道。
+    // 这种情况说明「数量」的来源，不要用「若干」——它会和「那个」这类限定词打架。
+    if (typeof spec.count === 'number') {
+      const noun = isPlaceholder ? '刚被摧毁的那个符号' : what;
+      return `${spec.count} 个${noun}`;
+    }
+    const dyn = (spec.count as { $dyn?: string } | undefined)?.$dyn ?? '';
+    if (/item_count/.test(dyn)) return `每个本道具 1 个${what}`;
+    if (/\$self_index|values\[/.test(dyn)) return `若干${what}（数量取自本符号的面板值）`;
+    return `1 个${what}`;
   });
-  const body = parts.join('、');
-  // 「生成 1 个…」留空格，「生成若干…」不留
-  return /^\d/.test(body) ? `生成 ${body}` : `生成${body}`;
+  return `生成 ${parts.join('、')}`;
 }
 
 /** `*fineprint*` 伪符号的规则靠 fp 门控区分于普通符号规则 */
@@ -2128,12 +2275,11 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   // 必须排在 SILENT_VTC 之前：空 vtc 在静默表里，否则整句会被当成无声明吞掉
   if (!rule.vtc && rule.diff === null && (rule.spawn?.length ?? 0) > 0) {
     const c = readCond(rule, owner, rule.flags.includes('target:adjacent'));
-    const gate = gateText(rule);
     const noun = c.typeName ?? (c.groupLabel ? `${c.groupLabel}符号` : '');
     const state = c.destroyed === undefined ? '' : c.destroyed ? '被摧毁的' : '完好的';
-    const pre = [gate ? `${gate}时` : '', noun ? `每有一个${state}${noun}` : '']
-      .filter(Boolean)
-      .join('，');
+    // 门控由 describeRule 统一加在句首；这里再写一遍会渲染成
+    // 「持有 X 光机时，持有 X 光机时，生成 1 个宝石符号」
+    const pre = noun ? `每有一个${state}${noun}` : '';
     return pre ? `${pre}，` : '';
   }
   if (SILENT_VTC.has(rule.vtc)) return '';
@@ -2152,11 +2298,12 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   const isVerb = VERB_VTC.has(rule.vtc) || RARITY_KEYS.has(rule.vtc);
 
   // 邻居的称呼：显式类型 > 分组 > 泛称
+  // 泛称要有量词：「摧毁相邻格」不成句，「摧毁相邻的符号」才是完整的宾语。
   const neighbor = c.typeName
     ? `相邻的${c.typeName}`
     : c.groupLabel
       ? `相邻的${c.groupLabel}符号`
-      : '相邻格';
+      : '相邻的符号';
 
   // kind:"cond" 的声明挂在「满足条件的那个符号」身上（Item__Item.gd:1274-1298），
   // 效果落在它自己，不是发起者身上，所以措辞从「自己」换成那个符号。
@@ -2178,10 +2325,12 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   if (adjacent) {
     if (rule.vtc === 'destroyed') return `摧毁${neighbor}`;
     if (rule.vtc === 'removed') return `移除${neighbor}`;
+    // 状态型效果要先给出系词，否则「相邻的符号不可被摧毁」缺谓语
+    const stateVerb = STATE_VTC.has(rule.vtc) ? `改为${eff}` : eff;
     // 没有任何条件：直接作用在每一格相邻符号上
     const bare = !c.typeName && !c.groupLabel && c.destroyed === undefined && !c.luck && c.extras.length === 0;
-    if (bare) return isVerb ? `${neighbor}${eff}` : `相邻符号${eff}`;
-    if (isVerb) return `${neighbor}${eff}`;
+    if (bare) return isVerb ? `${neighbor}${stateVerb}` : `相邻符号${eff}`;
+    if (isVerb) return `${neighbor}${stateVerb}`;
     // 条件里若还有别的限定，补在「每有一格」之后
     const rest = c.extras.join('、');
     return `每有一格${neighbor}${rest ? `（${rest}）` : ''}，${eff}`;
@@ -2198,13 +2347,28 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   else if (c.destroyed !== undefined) cond = c.destroyed ? '本符号被摧毁' : '本符号完好';
   const extras = c.extras;
   if (extras.length > 0) {
-    cond = cond ? `${cond}、${extras.join('、')}` : extras.join('、');
+    // 附加前提都是必须同时成立的条件，用「且」连接。
+    // 若前面已经有主条件，两者之间也用「且」而不是顿号——
+    // 「场上有被摧毁的小偷、数值 < 1」读起来像并列名词，会误解成两个对象。
+    const joined = extras.join('且');
+    cond = cond ? `${cond}且${joined}` : joined;
     plainCond = false;
   }
 
   if (isVerb) {
+    // 状态型效果（不可被摧毁 / 被吸干）是形容词短语，需要系词才成句：
+    // 概率句用「让自己被吸干」，条件句用「自己改为不可被摧毁」。
+    const stateAdj = STATE_VTC.has(rule.vtc);
     const selfVerb =
-      rule.vtc === 'destroyed' ? '摧毁自己' : rule.vtc === 'removed' ? '移除自己' : `自己${eff}`;
+      rule.vtc === 'destroyed'
+        ? '摧毁自己'
+        : rule.vtc === 'removed'
+          ? '移除自己'
+          : stateAdj
+            ? odds
+              ? `自己被${eff.replace(/^被/, '')}`
+              : `自己改为${eff}`
+            : `自己${eff}`;
     // 概率句里主语已经是「这个符号」，再写「自己」就重复了
     const verb = odds ? selfVerb.replace(/^自己/, '') : selfVerb;
     if (onTarget) {

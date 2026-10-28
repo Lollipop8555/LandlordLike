@@ -25,21 +25,21 @@ export interface EggDef {
 export const EGGS: EggDef[] = [
   {
     id: 'dog',
-    verb: '撸狗',
+    verb: '抚摸狗',
     stat: 'time_spent_petting_dog',
     // 源码：add_stat("time_spent_petting_dog", 35.0 / 3600.0, false)，逐帧
     perFrame: 35 / 3600,
     perTap: 0.3,
-    hint: '尾巴摇起来了',
+    hint: '狗摇动尾巴',
   },
   {
     id: 'rabbit',
-    verb: '逗兔子',
+    verb: '触碰兔子',
     stat: 'rabbit_hops',
     // 源码：add_stat("rabbit_hops", 3.0 / 31.0, false)，逐帧
     perFrame: 3 / 31,
     perTap: 20,
-    hint: '兔子蹦了一下',
+    hint: '兔子跳跃一次',
   },
 ];
 

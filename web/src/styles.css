@@ -721,6 +721,26 @@ html[data-motion='reduced'] *::after {
 .decl-head b { color: var(--gold); font-family: var(--mono); }
 .decl { padding: 7px 0; border-bottom: 1px solid rgba(36, 48, 74, 0.6); }
 .decl:last-child { border-bottom: 0; padding-bottom: 0; }
+/* 道具说明：一句概括 + 每行「条件 → 效果」，条件与效果分开排，避免读成一长串 */
+.decl-summary {
+  margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--gold);
+}
+.decl-when {
+  font-size: 10.5px; letter-spacing: 0.04em; color: var(--muted);
+  text-transform: none;
+}
+.decl-when::before { content: '当 '; }
+.decl-do {
+  margin-top: 3px; font-family: var(--mono); font-size: 11.5px;
+  color: #d7e3f5; line-height: 1.6; word-break: break-word;
+}
+.decl-do::before { content: '→ '; color: var(--gold); }
+.decl-gap {
+  margin: 8px 0 0; padding: 6px 9px; border-radius: 8px;
+  font-size: 11px; line-height: 1.5; color: var(--muted);
+  background: rgba(120, 140, 175, 0.08);
+  border: 1px solid rgba(120, 140, 175, 0.2);
+}
 /* 行为未还原的提示条：和图鉴里的"无特效"区分开，别让玩家以为是设计如此 */
 .decl-warn {
   margin: 0 0 6px; padding: 6px 9px; border-radius: 8px;

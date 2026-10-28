@@ -489,7 +489,7 @@ function injectDud(state: GameState): void {
   state.log.unshift({
     turn: state.totalSpins,
     kind: 'info',
-    text: `难度注入：第 ${state.floor} 层，每 ${every} 次旋转塞入 1 个哑弹`,
+    text: `难度注入：第 ${state.floor} 层，每 ${every} 次旋转生成 1 个哑弹`,
   });
 }
 
@@ -577,13 +577,13 @@ export function swapSymbols(
   from: number,
   to: number,
 ): { ok: boolean; message: string } {
-  if (!state.swapPending) return { ok: false, message: '现在不能换位' };
-  if (from === to) return { ok: false, message: '还是同一格' };
-  if (!onBoard(from) || !onBoard(to)) return { ok: false, message: '只能在本层棋盘的可见格里移动' };
+  if (!state.swapPending) return { ok: false, message: '当前不处于交换窗口' };
+  if (from === to) return { ok: false, message: '两次选择的是同一格' };
+  if (!onBoard(from) || !onBoard(to)) return { ok: false, message: '只能在棋盘可见格之间交换' };
   const a = state.cells[from];
   const b = state.cells[to];
   if (!a || !b) return { ok: false, message: '格子已变动，请重试' };
-  if (!a.def && !b.def) return { ok: false, message: '两格都是空的' };
+  if (!a.def && !b.def) return { ok: false, message: '两个格子都是空的' };
 
   const ax = from % REELS_X;
   const ay = Math.floor(from / REELS_X) + 1;
@@ -795,7 +795,7 @@ export function resolveSpin(state: GameState): void {
     state.log.unshift({
       turn: state.totalSpins,
       kind: 'info',
-      text: state.boss?.active ? '旋转次数用尽，需付租（房东战）' : '旋转次数用尽，需付租',
+      text: state.boss?.active ? '旋转次数已用尽，需支付租金（房东战）' : '旋转次数已用尽，需支付租金',
     });
     if (!state.over && !state.won) {
       addMail(
@@ -1199,7 +1199,7 @@ export function payRent(state: GameState): { ok: boolean; message: string } {
     // 付不起即破产（Pop-up__Pop-up.gd:2830-2900 的 rent_due 分支没有「受伤」这回事，
     // 房东的血条只在房东之战里被玩家打）
     state.over = true;
-    state.log.unshift({ turn: state.totalSpins, kind: 'rent', text: `付租失败：租金 ${owed}，持有 ${state.coins}` });
+    state.log.unshift({ turn: state.totalSpins, kind: 'rent', text: `付租失败：需 ${owed}，持有 ${state.coins}` });
     addMail(
       state,
       gameOverMail({ period: nextPayment, rent: owed, coins: state.coins, turn: state.totalSpins }),
@@ -1315,7 +1315,7 @@ export function startBossFight(state: GameState): void {
   state.log.unshift({
     turn: state.totalSpins,
     kind: 'info',
-    text: `房东之战开始：房东血量 ${maxHp}，每回合赚到的金币会同时打在房东身上`,
+    text: `房东之战开始：房东生命值 ${maxHp}，每转产出的金币同时计入对房东的伤害`,
   });
   trimLog(state);
 }
@@ -1377,10 +1377,10 @@ export function rerollShop(state: GameState): { ok: boolean; message: string } {
   state.log.unshift({
     turn: state.totalSpins,
     kind: 'buy',
-    text: `重掷商店：-${state.rerollCost} 重掷代币（剩 ${state.rerollTokens}）`,
+    text: `重掷商店：消耗 ${state.rerollCost} 枚重掷代币（剩余 ${state.rerollTokens} 枚）`,
   });
   trimLog(state);
-  return { ok: true, message: '已重掷' };
+  return { ok: true, message: '商店已重掷' };
 }
 
 /**
@@ -1396,7 +1396,7 @@ export function removeSymbolAt(
     return { ok: false, message: `移除代币不足（需要 ${state.removalCost}）` };
   }
   const cell = state.cells[cellIndex];
-  if (!cell?.def) return { ok: false, message: '这里没有符号' };
+  if (!cell?.def) return { ok: false, message: '该格没有符号' };
   // 细则 20/21/36 与 dud 会关掉 can_be_removed
   if (cell.canBeRemoved === false) return { ok: false, message: `${symbolName(cell.def.id)} 不能被移除` };
   const x = cellIndex % REELS_X;
@@ -1447,7 +1447,7 @@ export function removeSymbolAt(
   state.log.unshift({
     turn: state.totalSpins,
     kind: 'buy',
-    text: `移除符号 ${symbolName(id)}：-${state.removalCost} 移除代币（剩 ${state.removalTokens}）${
+    text: `移除符号 ${symbolName(id)}：消耗 ${state.removalCost} 枚移除代币（剩余 ${state.removalTokens} 枚）${
       spawned.length > 0 ? `，掉落 ${spawned.map((s) => symbolName(s)).join('、')}` : ''
     }`,
   });
@@ -1477,17 +1477,17 @@ export function essenceUpgrade(state: GameState, itemId: string): { ok: boolean;
   const held = state.items.find((it) => it.def.id === itemId);
   if (!held) return { ok: false, message: '没有这个道具' };
   const essenceId = `${itemId}_essence`;
-  if (!SYMBOL_BY_ID.has(essenceId)) return { ok: false, message: '这个道具没有精华形态' };
+  if (!SYMBOL_BY_ID.has(essenceId)) return { ok: false, message: '该道具没有精华版' };
 
   held.def = symbol(essenceId);
   state.essenceTokens -= 1;
   state.log.unshift({
     turn: state.totalSpins,
     kind: 'buy',
-    text: `精华升级：${symbolName(itemId)} → ${symbolName(essenceId)}（剩 ${state.essenceTokens} 精华）`,
+    text: `精华化：${symbolName(itemId)} → ${symbolName(essenceId)}（剩余 ${state.essenceTokens} 枚精华代币）`,
   });
   trimLog(state);
-  return { ok: true, message: `已升华为 ${symbolName(essenceId)}` };
+  return { ok: true, message: `已升级为 ${symbolName(essenceId)}` };
 }
 
 /** 能否对某道具做精华升级（界面据此显示按钮） */

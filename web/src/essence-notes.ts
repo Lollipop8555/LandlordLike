@@ -56,16 +56,25 @@ const DYN_LABEL: Record<string, string> = {
  * 只对道具卡有意义的补充（句末「（消耗X精华）」——消耗由最后一句统一交代）。
  */
 function polish(text: string): string {
-  return text
-    .replace(/^本符号被摧毁时，/, '')
-    .replace(/^被其他符号触发过时，/, '')
-    .replace(/^本符号/, '自身')
-    .replace(/本符号/g, '自身')
-    .replace(/场上有(.+?)时，/g, '只要$1在场，')
-    // 与末句「累积达到 N 后消耗」用同一个词
-    .replace(/积累/g, '累积')
-    .replace(/（消耗[^）]*精华）$/, '')
-    .trim();
+  return (
+    text
+      .replace(/^本符号被摧毁时，/, '')
+      .replace(/^被其他符号触发过时，/, '')
+      .replace(/^本符号/, '自身')
+      .replace(/本符号/g, '自身')
+      .replace(/场上有(.+?)时，/g, '只要$1在场，')
+      // 与末句「累积达到 N 后消耗」用同一个词
+      .replace(/积累/g, '累积')
+      .replace(/（消耗[^）]*精华）$/, '')
+      // 「自身数值变为被摧毁符号的对应数值」——主语是精华自己，
+      // 读起来像「精华被摧毁了」，改写成明确的来源
+      .replace(
+        /^自身数值变为(被摧毁符号的|被摧毁的)(.+)$/,
+        '自身数值改为每个被摧毁符号的$2（累加）',
+      )
+      .replace(/^自身数值增加被摧毁符号的对应数值$/, '自身数值按被摧毁符号的数值累加')
+      .trim()
+  );
 }
 
 /** `{$self_index:N}` 这类占位取值换算成这张卡的实际数值 */
@@ -94,7 +103,10 @@ export function essenceLines(id: string): string[] {
   const base = baseId ? symbolName(baseId) : '';
   lines.push(base ? `《${base}》的强化版：买下即替换手里的同名道具` : '强化版道具：不占棋盘格');
 
-  const gains: string[] = [];
+  /** 前缀（消耗时 / 触发时 / 无）→ 效果列表，同前缀的合并成一句 */
+  const byPrefix = new Map<string, string[]>();
+  /** 保持前缀的首次出现顺序 */
+  const order: string[] = [];
   for (const rule of rules) {
     // 消耗本身由最后一句统一交代，不逐条念技术声明
     if (rule.vtc === 'destroyed') continue;
@@ -104,13 +116,23 @@ export function essenceLines(id: string): string[] {
     // 在精华卡上换成它自己的说法，否则读起来像在描述别人
     const clean = polish(text);
     const body = VALUE_HEADS.test(clean) ? `自身${clean}` : clean;
-    const line = waitDestroyed(rule)
-      ? `消耗时，${body}`
-      : waitTrigger(rule)
-        ? `触发时，${body}`
-        : body;
-    if (!gains.includes(line)) gains.push(line);
+    const prefix = waitDestroyed(rule) ? '消耗时' : waitTrigger(rule) ? '触发时' : '';
+    const bucket = byPrefix.get(prefix) ?? [];
+    if (!bucket.includes(body)) bucket.push(body);
+    byPrefix.set(prefix, bucket);
+    if (!order.includes(prefix)) order.push(prefix);
   }
+
+  const gains: string[] = [];
+  for (const prefix of order) {
+    const bodies = byPrefix.get(prefix) ?? [];
+    if (bodies.length === 0) continue;
+    const joined = bodies.join('；');
+    // 蓝西装这类「消耗时给梅花 +1、消耗时给黑桃 +1」合并成一句，
+    // 不再把同一个前缀重复念两遍
+    gains.push(prefix ? `${prefix}，${joined}` : joined);
+  }
+
   if (gains.length > 0) {
     lines.push(...gains);
   } else if (base) {

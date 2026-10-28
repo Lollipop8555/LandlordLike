@@ -6,9 +6,9 @@ import type { Settings } from './progress/settings';
 import type { GameMode } from './types';
 
 const MODES: Array<{ id: GameMode; icon: string; name: string; desc: string }> = [
-  { id: 'normal', icon: '🏠', name: '普通', desc: '付满 12 期租金' },
-  { id: 'endless', icon: '♾️', name: '无尽', desc: '12 期后租金持续上涨' },
-  { id: 'sandbox', icon: '🧪', name: '沙盒', desc: '从第 12 期开始，金币 999,999' },
+  { id: 'normal', icon: '🏠', name: '普通', desc: '付清 12 期租金即完成租约' },
+  { id: 'endless', icon: '♾️', name: '无尽', desc: '12 期后租金继续上涨，无终点' },
+  { id: 'sandbox', icon: '🧪', name: '沙盒', desc: '从第 12 期开始，初始金币 999,999' },
 ];
 
 const money = (n: number): string => n.toLocaleString('en-US');
@@ -205,14 +205,14 @@ export function renderSettingsPanel(settings: Settings, hasRun: boolean): string
       <div class="setting-row">
         <div>
           <b>减弱动效</b>
-          <small>旋转只滚一圈，数字不再缓动，面板直接出现</small>
+          <small>旋转只滚一圈，数值不再缓动，面板直接显示</small>
         </div>
         ${toggle(settings.reducedMotion, 'toggle-motion', '减弱动效')}
       </div>
       <div class="setting-row">
         <div>
           <b>顶部提示条</b>
-          <small>新信件、成就解锁一类的轻提示</small>
+          <small>显示新信件、成就解锁一类提示</small>
         </div>
         ${toggle(settings.toasts, 'toggle-toasts', '顶部提示条')}
       </div>
@@ -224,38 +224,39 @@ export function renderSettingsPanel(settings: Settings, hasRun: boolean): string
 }
 
 /**
- * 首次引导：只讲三件"不看就会打错"的事——位置与邻接、旋转与期数、付租与商店。
- * 内容刻意短，每步三条；具体数值留给牌库和细则面板。
+ * 首次引导：只讲三条必须了解的规则——位置与邻接、旋转与期数、付租与商店。
+ * 内容保持简短；具体数值留在牌库与细则面板中查看。
  */
 export const TUTORIAL_STEPS: Array<{ icon: string; title: string; lead: string; points: string[] }> = [
   {
     icon: '🧲',
-    title: '位置不是装饰',
-    lead: '符号就是你的牌组，落在哪一格由旋转决定。',
+    title: '位置与邻接',
+    lead: '符号构成你的牌库，落到哪一格由旋转决定。',
     points: [
-      '相邻加成沿邻接传播，位置决定增益落在谁身上',
-      '棋盘不能自由拖动；只有稀有的「交换装置」能在每转停盘后换一次，两个格子',
-      '所以想叠乘数，靠的是抽到相邻，而不是摆好阵型',
+      '相邻加成沿邻接关系传播，位置决定增益作用于哪个符号',
+      '棋盘不可手动拖动；只有「交换装置」可在每转停盘后交换两个符号，每转一次',
+      '因此叠加乘数取决于抽到的相邻关系，而非预先排布',
     ],
   },
   {
     icon: '🎰',
-    title: '每期 10 次旋转',
-    lead: '一次旋转会把整盘符号重新排列，并结算一次产出。',
+    title: '旋转与期数',
+    lead: '一次旋转会重新排列整盘符号，并结算一次产出。',
     points: [
-      '本期累计显示在顶部"还差"里，每次旋转都会往上加',
-      '旋转用尽才轮得到付租，所以多留几次旋转就是多一轮产出',
-      '金币不会清零，可以攒着穿过几期',
+      '第 1 期有 5 次旋转，此后逐期递增，第 12 期为 10 次',
+      '本期已累计的产出显示在顶部，每次旋转后累加',
+      '旋转次数用尽后才可付租，因此保留旋转等同于保留产出机会',
+      '金币不会清零，可跨期保留',
     ],
   },
   {
     icon: '🧾',
-    title: '付租，再白拿一张',
-    lead: '累计金币够租金就能付，付不起立刻出局。',
+    title: '付租与商店',
+    lead: '金币不低于当期租金即可支付；不足则本局结束。',
     points: [
-      '旋转有产出、以及每期付完租之后，都会开一次三选一商店，免费拿一张',
-      '重掷 / 移除 / 精华代币按需花，付租时没用的精华会作废',
-      '第 12 期付清后房东下场，你每回合的收入同时就是伤害',
+      '每次旋转产生产出后、以及每期付清租金后，各开放一次三选一商店，可免费选取一张',
+      '重掷、移除、精华三种代币按需消耗；精华代币不结转到下一期',
+      '12 期付清后进入房东战，此后每次旋转的产出同时计入对房东的伤害',
     ],
   },
 ];

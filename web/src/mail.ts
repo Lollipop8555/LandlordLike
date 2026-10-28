@@ -1,7 +1,9 @@
-// 房东信箱：原作把叙事、教学和「同伴援助」都做成信件（Pop-up__Pop-up.gd:224 load_emails）。
+// 房东信箱：原作把叙事、教学与「同伴援助」都做成信件（Pop-up__Pop-up.gd:224 load_emails）。
 // 原文案在 res://JSON/Emails - JSON.json 与翻译表里，仓库没有这部分资源，
 // 这里按同样的邮件类型自写中文文案；凡涉及我们改过名的符号/道具，
 // 一律写成「图标 中文名(英文 id)」，方便与原作对照（如 🌶辣椒(Chili Powder)）。
+//
+// 文案口径：说明规则与状态，不使用玩笑、绰号或感叹式口语。
 import { SYMBOL_BY_ID } from './data';
 import { emojiOf } from './sprites';
 import { bilingualName } from './names';
@@ -78,19 +80,19 @@ export function comradeMail(floor: number, first: boolean, turn: number): Mail {
   const v = comradeValues(floor);
   const lines = [
     first
-      ? '「别慌，我们先垫一点。这点家当拿去用，别把房子输给那个房东。」'
-      : '「这个月的份子钱凑齐了，拿着。」',
-    `第 ${floor} 层的份子钱：♻️ ${v.reroll}、🗑️ ${v.removal}、💎 ${v.essence}。越往上，我们能凑的越少。`,
+      ? '我们凑了一份代币给你，请收下。往后每当租金上涨，我们仍会尽力支援。'
+      : '本月可支援的代币已凑齐，随信附上。',
+    `第 ${floor} 层可提供的数量：重掷 ${v.reroll} 枚、移除 ${v.removal} 枚、精华 ${v.essence} 枚。楼层越高，可凑出的数量越少。`,
   ];
   if (first) {
     lines.push(
-      `♻️ 重掷在商店里换一批候选；🗑️ 移除可以把不想要的符号删掉（先点顶部 🗑️）；💎 精华能把道具升级成精华版。`,
+      '重掷代币可在商店里更换一批候选；移除代币用于删除不需要的符号（先点顶部的删除按钮）；精华代币可把道具升级为精华版。',
     );
   }
   return mail(
     first ? 'init_comrade_help' : 'comrade_help',
     FROM_COMRADES,
-    first ? '同伴来信：先借你一点' : '同伴来信：份子钱',
+    first ? '同伴来信：首批援助' : '同伴来信：本期支援',
     lines.join('\n\n'),
     turn,
     v,
@@ -108,16 +110,16 @@ export function rentDueMail(ctx: {
 }): Mail {
   const short = Math.max(0, ctx.rent - ctx.coins);
   const lines = [
-    `第 ${ctx.period} 期：租金 ${ctx.rent}，你手上有 ${ctx.coins} 金币${short > 0 ? `，还差 ${short}` : '，够了'}。`,
-    '旋转次数已经用尽，该付账了。',
+    `第 ${ctx.period} 期租金 ${ctx.rent}，当前持有 ${ctx.coins} 金币${short > 0 ? `，尚差 ${short}` : '，已足够支付'}。`,
+    '本期旋转次数已用尽，请结算租金。',
   ];
   if (ctx.essenceTokens > 0) {
     lines.push(
-      `💎 精华代币 ${ctx.essenceTokens} 个：付租时没花掉的会被房东收走，能升级的道具（点道具栏）先升了。`,
+      `尚有 ${ctx.essenceTokens} 枚精华代币：付租时未使用的部分不会保留，建议先到道具栏完成升级。`,
     );
   }
-  lines.push(`🗑️ 移除代币每次消耗 ${ctx.removalCost}，删符号不花金币，别浪费。`);
-  return mail('rent_due', FROM_LANDLORD, '这期的账', lines.join('\n\n'), ctx.turn);
+  lines.push(`移除代币每次消耗 ${ctx.removalCost} 枚，删除符号不消耗金币。`);
+  return mail('rent_due', FROM_LANDLORD, '第 ' + ctx.period + ' 期租金', lines.join('\n\n'), ctx.turn);
 }
 
 /** 第一次买到辣椒时，教精华怎么用（chili_powder_essence_prompt） */
@@ -127,9 +129,9 @@ export function chiliEssenceMail(essenceTokens: number, turn: number): Mail {
     FROM_HOUSE,
     `关于 ${tagOf('chili_powder')}`,
     [
-      `你拿到了 ${tagOf('chili_powder')}。`,
-      `💎 精华代币（你现在 ${essenceTokens} 个）可以把它升级成 ${tagOf('chili_powder_essence')}。`,
-      '点下面道具栏里的图标 →「精华化」即可。',
+      `你已获得 ${tagOf('chili_powder')}。`,
+      `当前持有 ${essenceTokens} 枚精华代币，可将其升级为 ${tagOf('chili_powder_essence')}。`,
+      '在道具栏中点击该道具图标，选择「精华化」即可完成升级。',
     ].join('\n\n'),
     turn,
   );
@@ -140,11 +142,11 @@ export function removalTipMail(cost: number, turn: number): Mail {
   return mail(
     'removal_token_prompt',
     FROM_HOUSE,
-    '🗑️ 移除代币怎么用',
+    '移除代币的用法',
     [
-      `点顶部的 🗑️ 进入移除模式，再点棋盘上任意符号就能删掉它，每次消耗 ${cost} 个代币。`,
-      `例：${tagOf('cat')} 这种只给自己加分的符号，占着格子却帮不上邻居时，删掉比留着划算。`,
-      '删掉的符号会从池里一起消失，不会再被抽到。',
+      `点击顶部的移除按钮进入移除模式，再点击棋盘上的任意符号即可将其删除，每次消耗 ${cost} 枚代币。`,
+      `例如 ${tagOf('cat')} 只提高自身数值、对相邻符号没有加成，占用格子却不参与协同，删除通常优于保留。`,
+      '被删除的符号会同时移出符号池，此后不会再被抽到。',
     ].join('\n\n'),
     turn,
   );
@@ -161,12 +163,12 @@ export function rentIncreaseMail(ctx: {
   return mail(
     'rent_increase',
     FROM_LANDLORD,
-    ctx.endless ? '房租还没有上限' : '下一期的账',
+    ctx.endless ? '租金继续上调' : `第 ${ctx.period + 1} 期租金`,
     [
-      `第 ${ctx.period} 期付清了。下一期租金 ${ctx.nextRent}，旋转 +${ctx.spinsGain}。`,
+      `第 ${ctx.period} 期租金已结清。下一期租金 ${ctx.nextRent}，本期旋转次数增加 ${ctx.spinsGain} 次。`,
       ctx.endless
-        ? '无尽模式不设终点：租金一直涨，撑不住就结算。'
-        : '租子只会越滚越大，别把金币全押在不涨的格子上。',
+        ? '无尽模式没有终点：租金持续上涨，直至无法支付为止。'
+        : '租金逐期递增，请注意保持每转产出同步增长。',
     ].join('\n\n'),
     ctx.turn,
   );
@@ -175,21 +177,21 @@ export function rentIncreaseMail(ctx: {
 /** 开局：房东的第一封信（原版 intro） */
 export function introMail(mode: 'normal' | 'sandbox' | 'endless', turn: number): Mail {
   const lines = [
-    `我是这栋楼的房东。规则很简单：每期先把租金凑齐，凑不齐就滚出去。`,
-    '旋转转出产出 → 用金币把好符号买进牌库 → 棋盘上摆满之后，同样的支出能换回更多钱。',
-    '格子少、符号挤，产出才长得快；只会堆高价符号而不让它们挨在一起，是赚不到钱的。',
+    '租约规则如下：每期须先付清当期租金，未付清即视为终止。',
+    '每转按符号面板值结算产出；付清租金后可免费选取一个符号或道具放入牌库。',
+    '产出沿相邻关系传播，落位由旋转决定，无法手动摆放；同一格相邻的加成符号越多，收益越高。',
   ];
   if (mode === 'sandbox') {
     lines.push(
-      '沙盒模式：从第 12 期开始，金币 999,999，另送重掷 / 移除 / 精华各 3 枚，随便试。付租会继续推进期数，解锁更高的楼层档位。',
+      '沙盒模式从第 12 期开始，初始金币 999,999，并另附重掷、移除、精华代币各 3 枚，供自由试验。付租会继续推进期数，并解锁更高的楼层档位。',
     );
   } else if (mode === 'endless') {
-    lines.push('无尽模式：没有第 12 期的终点，租金会一直涨，撑到你付不出为止。');
+    lines.push('无尽模式没有第 12 期的终点，租金持续上涨，直至你无法支付。');
   } else {
-    lines.push('付完 12 期，你就自由了——不过房东我可能会亲自来一趟。');
+    lines.push('付清全部 12 期租金后，租约即告完成。届时我会另行通知。');
   }
-  lines.push('有信我会塞进上面的 📬 信箱，记得看。');
-  return mail('intro', FROM_LANDLORD, '房东的第一封信', lines.join('\n\n'), turn);
+  lines.push('后续通知会投递到顶部的信箱，请注意查收。');
+  return mail('intro', FROM_LANDLORD, '租约说明', lines.join('\n\n'), turn);
 }
 
 /** 房东倒下后的收尾信（ending） */
@@ -197,10 +199,10 @@ export function endingMail(ctx: { rent: number; totalEarned: number; turn: numbe
   return mail(
     'ending',
     FROM_LANDLORD,
-    '这栋楼归你了',
+    '租约终止',
     [
       `最后一期租金 ${ctx.rent}，本局累计产出 ${ctx.totalEarned}。`,
-      '我倒了。房租、纸条、那些破规则，都归你了。成就与统计已经写进本地存档。',
+      '我已无法继续追加条款，这栋楼交由你处置。本局成绩与统计已写入本地存档。',
     ].join('\n\n'),
     ctx.turn,
   );
@@ -211,10 +213,10 @@ export function bossMail(hp: number, turn: number): Mail {
   return mail(
     'boss_fight_1',
     FROM_LANDLORD,
-    '房东亲自下场',
+    '最终结算',
     [
-      '12 期租金你都付清了，所以我亲自来。',
-      `我的血量 ${hp}。别想着跑——这一场打完，这栋楼才算有个结果。`,
+      '12 期租金已全部付清，按租约最后一节，由我与你直接结算。',
+      `我的生命值 ${hp}。此次结算结束后，本局方才成立。`,
     ].join('\n\n'),
     turn,
   );
@@ -225,11 +227,11 @@ export function bossFightMail2(hp: number, turn: number): Mail {
   return mail(
     'boss_fight_2',
     FROM_LANDLORD,
-    '那就开打',
+    '结算规则',
     [
-      `我站在这儿，${hp} 点血，一回合比一回合更恼火。`,
-      '你每转赚到的金币会同时打进我的血条，一个子儿都不会留在你口袋里；租金照付，付不出来就滚出去。',
-      '打空我的血，这栋楼归你。',
+      `我的生命值 ${hp}，并且会随回合推进持续提高。`,
+      '每转产出的金币同时计入对我造成的伤害，不会留在你的账户里；租金仍需照付，未能支付即告结束。',
+      '将我的生命值降至 0，这栋楼归你。',
     ].join('\n\n'),
     turn,
   );
@@ -247,10 +249,10 @@ export function finePrintMail(ctx: {
   dynamicIcon?: string;
   turn: number;
 }): Mail {
-  const lines = [`细则 #${ctx.num}「${ctx.name ?? `细则 ${ctx.num}`}」从下回转开始生效。`];
-  if (ctx.values.length > 0) lines.push(`这条的数值：${ctx.values.join(' / ')}。`);
-  if (ctx.dynamicIcon) lines.push(`它盯上的符号：${tagOf(ctx.dynamicIcon)}。`);
-  lines.push('细则不需要你操作，会自动叠到结算上；想不起来自己有哪些，随时点开左侧的细则列表。');
+  const lines = [`细则 #${ctx.num}「${ctx.name ?? `细则 ${ctx.num}`}」自下一转起生效。`];
+  if (ctx.values.length > 0) lines.push(`本条数值：${ctx.values.join(' / ')}。`);
+  if (ctx.dynamicIcon) lines.push(`指定符号：${tagOf(ctx.dynamicIcon)}。`);
+  lines.push('细则无需操作，会自动叠入结算；如需查看当前生效的全部条目，点开细则列表。');
   return mail('fine_print', FROM_LANDLORD, `细则 #${ctx.num}`, lines.join('\n\n'), ctx.turn);
 }
 
@@ -259,10 +261,10 @@ export function winMail(ctx: { period: number; rent: number; totalEarned: number
   return mail(
     'win',
     FROM_LANDLORD,
-    '12 期付清了',
+    '12 期租金已付清',
     [
-      `第 ${ctx.period} 期租金 ${ctx.rent} 也付清了。按租约，你本来该拿钥匙了。`,
-      `本局累计产出 ${ctx.totalEarned}。不过你别急着搬家——我打算亲自来一趟。`,
+      `第 ${ctx.period} 期租金 ${ctx.rent} 已结清，按租约你已具备接手资格。`,
+      `本局累计产出 ${ctx.totalEarned}。在交接之前，我会亲自与你结算一次。`,
     ].join('\n\n'),
     ctx.turn,
   );
@@ -273,26 +275,25 @@ export function inventoryMail(turn: number): Mail {
   return mail(
     'inventory',
     FROM_HOUSE,
-    '关于你刚买的道具',
+    '道具栏说明',
     [
-      '道具不进牌库，直接生效，永久留在这一局里。',
-      '同一种道具再买一次会叠层（右上角的 ×2、×3），叠得越高效果越强。',
-      '💎 精华代币可以把它升级成精华版：点道具图标 →「精华化」。付租时没花掉的精华会被房东收走。',
+      '道具不进入牌库，买下后立即生效，并在本局内持续保留。',
+      '同一种道具重复购买会叠层（显示为 ×2、×3），层数越高效果越强。',
+      '精华代币可将道具升级为精华版：在道具栏点击道具图标，选择「精华化」。付租时未使用的精华代币不会保留。',
     ].join('\n\n'),
     turn,
   );
 }
 
 /** 破产（game_over） */
-
 export function gameOverMail(ctx: { period: number; rent: number; coins: number; turn: number }): Mail {
   return mail(
     'game_over',
     FROM_LANDLORD,
-    '你被扫地出门了',
+    '租约终止',
     [
-      `第 ${ctx.period} 期租金 ${ctx.rent}，你只凑到 ${ctx.coins}。`,
-      '精华代币在付租时会作废，能升级就早点升。',
+      `第 ${ctx.period} 期租金 ${ctx.rent}，你的金币为 ${ctx.coins}，未能支付。`,
+      '精华代币在付租时会失效，建议尽早使用。',
     ].join('\n\n'),
     ctx.turn,
   );

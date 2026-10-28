@@ -354,7 +354,7 @@ async function doSpin(): Promise<void> {
     pushToast({
       icon: '🔀',
       title: '交换装置',
-      text: '这一转可以交换两个符号的位置（每转一次）',
+      text: '本转可交换两个符号的位置，每转一次',
     });
     return;
   }
@@ -403,7 +403,7 @@ function pickSwapSlot(slot: number): void {
   const res = swapSymbols(game, from, slot);
   ui.swapFrom = null;
   if (!res.ok) {
-    pushToast({ icon: '⚠️', title: '无法换位', text: res.message });
+    pushToast({ icon: '⚠️', title: '无法交换', text: res.message });
     paint();
     return;
   }
@@ -415,7 +415,7 @@ function pickSwapSlot(slot: number): void {
 function mailHint(prevTopId: string | undefined): void {
   const top = game.mails[0];
   if (top && top.id !== prevTopId && !top.read) {
-    pushToast({ icon: '📬', title: `新信件：${top.subject}`, text: '点顶部 📬 收信' });
+    pushToast({ icon: '📬', title: `新信件：${top.subject}`, text: '点击顶部信箱查看' });
   }
 }
 
@@ -471,7 +471,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       const want = Number.isFinite(n) ? Math.trunc(n) : 1;
       startFloor = Math.max(1, Math.min(cap, want));
       if (want > cap) {
-        pushToast({ icon: '🔒', title: `第 ${want} 层还没解锁`, text: `先通关第 ${cap} 层` });
+        pushToast({ icon: '🔒', title: `第 ${want} 层尚未解锁`, text: `需先通关第 ${cap} 层` });
       }
       break;
     }
@@ -524,7 +524,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       break;
     case 'wipe-run':
       clearRun();
-      pushToast({ icon: '🗑️', title: '已放弃上一局', text: '下次打开不会再恢复它' });
+      pushToast({ icon: '🗑️', title: '已放弃上一局', text: '该对局进度已删除，不再恢复' });
       break;
     case 'tutorial':
       // 手动重看：不影响 tutorialDone，关掉就没了
@@ -550,7 +550,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       break;
     }
     case 'reset-profile':
-      if (!window.confirm('清空所有统计与成就？')) return;
+      if (!window.confirm('确认清空全部统计与成就？此操作不可撤销。')) return;
       profile = resetProfile();
       break;
     case 'spin':
@@ -578,7 +578,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
     case 'reroll': {
       const res = rerollShop(game);
       if (!res.ok) pushToast({ icon: '⚠️', title: '无法重掷', text: res.message });
-      else pushToast({ icon: '♻️', title: '商店已重掷', text: `剩 ${game.rerollTokens} 重掷代币` });
+      else pushToast({ icon: '♻️', title: '商店已重掷', text: `剩余 ${game.rerollTokens} 枚重掷代币` });
       ui.peek = null;
       break;
     }
@@ -586,7 +586,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       // 停盘等换位时不能动棋盘：这一转的结算目标已经定了，原版同样把移除留在旋转前
       if (game.swapPending) return;
       if (!ui.removing && game.removalTokens < game.removalCost) {
-        pushToast({ icon: '⚠️', title: '移除代币不足', text: `需要 ${game.removalCost} 个移除代币` });
+        pushToast({ icon: '⚠️', title: '移除代币不足', text: `本次需要 ${game.removalCost} 枚移除代币` });
         return;
       }
       ui.removing = !ui.removing;
@@ -595,7 +595,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       const res = removeSymbolAt(game, Number(el.dataset.index));
       pushToast({
         icon: res.ok ? '🗑️' : '⚠️',
-        title: res.ok ? '已移除' : '无法移除',
+        title: res.ok ? '移除完成' : '无法移除',
         text: res.message,
       });
       if (game.removalTokens < game.removalCost) ui.removing = false;
@@ -606,7 +606,7 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       const res = essenceUpgrade(game, id);
       pushToast({
         icon: res.ok ? '💎' : '⚠️',
-        title: res.ok ? '精华升级' : '无法升级',
+        title: res.ok ? '精华化完成' : '无法精华化',
         text: res.message,
       });
       if (res.ok) {
@@ -869,7 +869,7 @@ if (restored) {
   screen = 'game';
   tutorialStep = profile.tutorialDone ? null : 0;
   paint();
-  pushToast({ icon: '♻️', title: '接着上次的对局', text: `第 ${game.floor} 层 · 第 ${game.payment + 1} 期` });
+  pushToast({ icon: '♻️', title: '恢复上次对局', text: `第 ${game.floor} 层 · 第 ${game.payment + 1} 期` });
 } else {
   paint();
 }
