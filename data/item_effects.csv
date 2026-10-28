@@ -1,5 +1,5 @@
 item,branch_line,line,comparisons,vtc,diff,flags
-<outside>,0,1857,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value,"{""$dyn"":""-fp.values[0] * item_count""}",kind:self;last
+<outside>,0,1857,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value,"{""$dyn"":""-fp.values[0] * item_count""}",kind:self;last;when:fp:17;when:fp_icon:any
 coin_on_a_string,1864,1865,[],value,"{""$self_index"":0}",kind:self
 lucky_carrot,1866,1868,[],uncommon,"{""$self_index"":0}",kind:self;multiply
 lucky_carrot,1866,1869,[],rare,"{""$self_index"":0}",kind:self;multiply
@@ -10,18 +10,18 @@ golden_carrot,1872,1875,[],rare,"{""$self_index"":0}",kind:self;multiply
 golden_carrot,1872,1876,[],very_rare,"{""$self_index"":0}",kind:self;multiply
 golden_carrot,1872,1877,"[{""a"":""type"",""b"":""rabbit""}]",value_multiplier,"{""$self_index"":1}",kind:cond
 lemon,1878,1879,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",kind:cond
-fertilizer,1880,1881,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":0}",kind:cond;push_front
+fertilizer,1880,1881,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":0}",kind:cond;push_front;slot:0
 watering_can,1882,1892,"[{""a"":""type"",""b"":""seed""}]",value_bonus,"{""$self_index"":1}",kind:cond
-watering_can,1882,1900,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:very_rare;consumes_item;group:plant
-watering_can,1882,1902,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:rare;group:plant
-watering_can,1882,1904,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:uncommon;group:plant
-watering_can,1882,1906,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;group:plant
+watering_can,1882,1900,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:very_rare;consumes_item;consumes:fertilizer_essence;when:item:fertilizer_essence;when:no_fp:34;group:plant
+watering_can,1882,1902,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:rare;when:item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant
+watering_can,1882,1904,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;min_rarity:uncommon;when:item:compost_heap;when:no_item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant
+watering_can,1882,1906,"[{""a"":""type"",""b"":""seed"",""not_prev"":true}]",type,null,kind:cond;when:no_item:compost_heap;when:no_item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant
 cleaning_rag,1907,1908,"[{""a"":""groups"",""b"":""gem""}]",value_bonus,"{""$self_index"":0}",kind:cond
 fruit_basket,1909,1910,"[{""a"":""groups"",""b"":""fruit""}]",value_bonus,"{""$self_index"":0}",kind:cond
-reroll,1911,1917,"[{""a"":""type"",""b"":""d3""},{""a"":""value_bonus"",""b"":{""$self_index"":0},""less_than"":true},{""a"":""value_bonus"",""b"":1,""greater_than_eq"":true}]",tried_to_give_rand_eff,true,kind:cond
-reroll,1911,1918,"[{""a"":""type"",""b"":""d3""},{""a"":""tried_to_give_rand_eff"",""b"":true}]",value_bonus,"{""$dyn"":""floor(rand_range($\""/root/Main\"".tile_database.d3.values[0], $\""/root/Main\"".tile_database.d3.values[1] + 1))""}",kind:cond;overwrite
-reroll,1911,1920,"[{""a"":""type"",""b"":""d5""},{""a"":""value_bonus"",""b"":{""$self_index"":1},""less_than"":true},{""a"":""value_bonus"",""b"":1,""greater_than_eq"":true}]",tried_to_give_rand_eff,true,kind:cond
-reroll,1911,1921,"[{""a"":""type"",""b"":""d5""},{""a"":""tried_to_give_rand_eff"",""b"":true}]",value_bonus,"{""$dyn"":""floor(rand_range($\""/root/Main\"".tile_database.d5.values[0], $\""/root/Main\"".tile_database.d5.values[1] + 1))""}",kind:cond;overwrite
+reroll,1911,1917,"[{""a"":""type"",""b"":""d3""},{""a"":""value_bonus"",""b"":{""$self_index"":0},""less_than"":true},{""a"":""value_bonus"",""b"":1,""greater_than_eq"":true}]",tried_to_give_rand_eff,true,kind:cond;when:no_item:reroll_essence
+reroll,1911,1918,"[{""a"":""type"",""b"":""d3""},{""a"":""tried_to_give_rand_eff"",""b"":true}]",value_bonus,"{""$dyn"":""floor(rand_range($\""/root/Main\"".tile_database.d3.values[0], $\""/root/Main\"".tile_database.d3.values[1] + 1))""}",kind:cond;overwrite;when:no_item:reroll_essence
+reroll,1911,1920,"[{""a"":""type"",""b"":""d5""},{""a"":""value_bonus"",""b"":{""$self_index"":1},""less_than"":true},{""a"":""value_bonus"",""b"":1,""greater_than_eq"":true}]",tried_to_give_rand_eff,true,kind:cond;when:no_item:reroll_essence
+reroll,1911,1921,"[{""a"":""type"",""b"":""d5""},{""a"":""tried_to_give_rand_eff"",""b"":true}]",value_bonus,"{""$dyn"":""floor(rand_range($\""/root/Main\"".tile_database.d5.values[0], $\""/root/Main\"".tile_database.d5.values[1] + 1))""}",kind:cond;overwrite;when:no_item:reroll_essence
 wanted_poster,1922,1923,"[{""a"":""type"",""b"":""thief""},{""a"":""destroyed"",""b"":true},{""a"":""value_bonus"",""b"":1,""less_than"":true}]",flat_value_bonus,1,kind:cond;overwrite
 wanted_poster,1922,1924,"[{""a"":""type"",""b"":""thief""}]",value_multiplier,"{""$self_index"":0}",kind:cond
 flush,1925,1926,"[{""a"":""symbol_trigger"",""b"":true}]",destroyed,true,kind:self
@@ -44,16 +44,16 @@ shrine,1957,1961,"[{""a"":""groups"",""b"":""organism""},{""a"":""destroyed"",""
 shrine,1957,1962,"[{""a"":""type"",""b"":""golem"",""not_prev"":true},{""a"":""tbd"",""b"":true}]",achievement_value,1,kind:cond
 undertaker,1963,1964,"[{""a"":""type"",""b"":""spirit""}]",indestructible,true,kind:cond;push_front
 grave_robber,1965,1966,"[{""a"":""groups"",""b"":""spiritbox""},{""a"":""values"",""b"":""rand_num"",""value_num"":0,""rand"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""values""}]",destroyed,true,kind:cond
-conveyor_belt,1967,1968,"[{""a"":""groups"",""b"":""spawner0""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front
-conveyor_belt,1967,1969,"[{""a"":""groups"",""b"":""spawner1""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front
+conveyor_belt,1967,1968,"[{""a"":""groups"",""b"":""spawner0""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front;slot:0
+conveyor_belt,1967,1969,"[{""a"":""groups"",""b"":""spawner1""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front;slot:1
 jackolantern,1970,1971,"[{""a"":""groups"",""b"":""halloween""}]",value_multiplier,"{""$self_index"":0}",kind:cond
 triple_coins,1972,1973,"[{""a"":""type"",""b"":""coin""}]",value_multiplier,"{""$self_index"":0}",kind:cond
-shedding_season,1974,1975,"[{""a"":""type"",""b"":""rabbit""}]",bonus_values,"{""$self_index"":0}",kind:cond
+shedding_season,1974,1975,"[{""a"":""type"",""b"":""rabbit""}]",bonus_values,"{""$self_index"":0}",kind:cond;slot:0
 shedding_season,1974,1976,"[{""a"":""type"",""b"":""rabbit""},{""a"":""values"",""b"":""rand_num"",""value_num"":0,""rand"":true}]",,null,kind:cond
 chicken_coop,1977,1978,"[{""a"":""groups"",""b"":""chickenstuff""}]",value_bonus,"{""$self_index"":2}",kind:cond
-chicken_coop,1977,1979,"[{""a"":""type"",""b"":""chicken""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front
-chicken_coop,1977,1980,"[{""a"":""type"",""b"":""chicken""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front
-chicken_coop,1977,1981,"[{""a"":""type"",""b"":""egg""}]",bonus_value_multipliers,"{""$self_index"":1}",kind:cond;push_front
+chicken_coop,1977,1979,"[{""a"":""type"",""b"":""chicken""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front;slot:0
+chicken_coop,1977,1980,"[{""a"":""type"",""b"":""chicken""}]",bonus_value_multipliers,"{""$self_index"":0}",kind:cond;push_front;slot:1
+chicken_coop,1977,1981,"[{""a"":""type"",""b"":""egg""}]",bonus_value_multipliers,"{""$self_index"":1}",kind:cond;push_front;slot:0
 yellow_pepper,1982,1983,"[{""a"":""symbol_trigger"",""b"":true}]",value,"{""$self_index"":0}",kind:self;overwrite
 nori_the_rabbit,1984,1985,"[{""a"":""type"",""b"":""rabbit""}]",value_bonus,"{""$self_index"":0}",kind:cond
 nori_the_rabbit,1984,1986,"[{""a"":""type"",""b"":""rabbit_fluff""}]",value_bonus,"{""$self_index"":0}",kind:cond
@@ -159,7 +159,7 @@ copycat_essence,2149,2150,"[{""a"":""symbol_trigger"",""b"":true}]",destroyed,tr
 copycat_essence,2149,2151,"[{""a"":""destroyed"",""b"":true}]",permanent_bonuses,"{""type"":""cat"",""multiplier"":{""$self_index"":1}}",kind:self
 clear_sky_essence,2152,2153,"[{""a"":""destroyed"",""b"":true}]",permanent_bonuses,"{""type"":""sun"",""multiplier"":{""$self_index"":0}}",kind:self
 clear_sky_essence,2152,2154,"[{""a"":""destroyed"",""b"":true}]",permanent_bonuses,"{""type"":""moon"",""multiplier"":{""$self_index"":0}}",kind:self
-looting_glove_essence,2155,2156,"[{""a"":""groups"",""b"":""box""},{""a"":""destroyed"",""b"":true}]",value_multiplier,"{""$self_index"":0}",kind:cond;consumes_item
+looting_glove_essence,2155,2156,"[{""a"":""groups"",""b"":""box""},{""a"":""destroyed"",""b"":true}]",value_multiplier,"{""$self_index"":0}",kind:cond;consumes_item;consumes:looting_glove_essence
 red_pepper_essence,2157,2158,"[{""a"":""symbol_trigger"",""b"":true}]",destroyed,true,kind:self;overwrite
 red_pepper_essence,2157,2159,"[{""a"":""destroyed"",""b"":true}]",value,"{""$self_index"":0}",kind:self;overwrite
 green_pepper_essence,2160,2161,"[{""a"":""symbol_trigger"",""b"":true}]",destroyed,true,kind:self;overwrite
@@ -223,7 +223,7 @@ oswald_the_monkey_essence,2251,2252,"[{""a"":""destroyed"",""b"":true}]",permane
 black_pepper_essence,2253,2254,"[{""a"":null,""b"":null,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""value"",""dynamic_b_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_b_key"":""symbols_destroyed_this_spin"",""dynamic_b_multiplier"":{""$dyn"":""values[0] * item_count""},""less_than"":true}]",value,null,"kind:self;overwrite;diffkey:symbols_destroyed_this_spin;diffmul:{""$self_index"":0}"
 black_pepper_essence,2253,2255,"[{""a"":""value"",""b"":1,""greater_than_eq"":true}]",destroyed,true,kind:self
 ancient_lizard_blade_essence,2256,2257,[],destroyed,true,kind:self
-tax_evasion_essence,2258,2259,"[{""a"":""non_prev_final_value"",""b"":0,""less_than"":true}]",value_bonus,"{""$self_index"":0}",kind:cond;push_front;consumes_item
+tax_evasion_essence,2258,2259,"[{""a"":""non_prev_final_value"",""b"":0,""less_than"":true}]",value_bonus,"{""$self_index"":0}",kind:cond;push_front;consumes_item;consumes:tax_evasion_essence
 lunchbox_essence|adoption_papers_essence,2260,2261,"[{""a"":""destroyed"",""b"":true}]",value,"{""$self_index"":1}",kind:self;overwrite
 void_portal_essence,2262,2263,"[{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""$\""/root/Main/Reels\""""},""dynamic_a_key"":""symbol_destroyed_during_spin""}]",value,null,kind:self;overwrite;diffkey:destroyed_symbol_types_size
 void_portal_essence,2262,2264,"[{""a"":""value"",""b"":1,""greater_than_eq"":true}]",destroyed,true,kind:self

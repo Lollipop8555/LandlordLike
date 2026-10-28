@@ -24,23 +24,34 @@ import {
   PLACEABLES,
   RARITY_TABLE,
   RENT_TABLE,
+  SHOP_SYMBOLS,
+  SYMBOL_POOL,
   SYMBOLS,
+  symbol,
 } from '../web/src/data';
+import { symbolCoverage } from '../web/src/effects';
+import { UNIMPLEMENTED_SYMBOLS } from '../web/src/unimplemented';
 import { emojiOf } from '../web/src/sprites';
 import {
-  BOSS_HP,
+  applySymbolRemovalItems,
+  bossRent,
   buyFromShop,
   closeShop,
+  createCell,
   createGame,
+  dealBossDamage,
   essenceUpgrade,
   isItemDef,
+  landlordMaxHp,
   markMailRead,
   payRent,
   removeSymbolAt,
+  rentFor,
   rerollShop,
   spin,
   startBossFight,
   unreadMails,
+  visibleCells,
 } from '../web/src/engine';
 import { comradeValues, tagOf } from '../web/src/mail';
 import { CELL_COUNT, COLS, ROWS, SLOTS_PER_REEL } from '../web/src/grid';
@@ -229,11 +240,51 @@ check('A 数据链路', '符号稀有度取值合法', badRarity.length === 0, b
 // 道具也在这张表里，所以用可放置物全集而非纯符号表。
 const symbolIds = new Set(PLACEABLES.map((s) => s.id));
 const declaredIds = EFFECTS.flatMap((e) => e.symbol.split('|'));
-const dangling = declaredIds.filter((id) => id && id !== '<outside>' && !symbolIds.has(id));
+const dangling = declaredIds.filter(
+  (id) => id && id !== '<outside>' && !id.startsWith('*') && !symbolIds.has(id),
+);
 check('A 数据链路', 'effects 声明的符号均存在', dangling.length === 0, [...new Set(dangling)].slice(0, 3).join(','));
 
 const covered = new Set(declaredIds.filter((id) => symbolIds.has(id)));
 info('A 数据链路', '有 add_effect 声明的可放置物', `${covered.size} / ${PLACEABLES.length}`);
+
+// 行为未还原清单：既要真的"仍然没行为"，也不能残留在抽取池里，
+// 还要保证清单只收有行为证据的符号（纯价值符号不算缺陷）
+{
+  const byId = new Map(SYMBOLS.map((s) => [s.id, s]));
+  const cov = new Map(symbolCoverage().map((r) => [r.id, r]));
+  const missing = [...UNIMPLEMENTED_SYMBOLS].filter((id) => !byId.has(id));
+  check('A 数据链路', '未还原清单里的符号都存在', missing.length === 0, missing.join(','));
+
+  const resurrected = [...UNIMPLEMENTED_SYMBOLS].filter((id) => (cov.get(id)?.executable ?? 0) > 0);
+  check(
+    'A 数据链路',
+    '未还原清单与实现一致（已补行为就移出清单）',
+    resurrected.length === 0,
+    resurrected.join(','),
+  );
+
+  const drawable = new Set(Object.values(SYMBOL_POOL).flat());
+  const leaked = [...UNIMPLEMENTED_SYMBOLS].filter((id) => drawable.has(id));
+  check('A 数据链路', '未还原符号不进入抽取池', leaked.length === 0, leaked.join(','));
+
+  const noEvidence = [...UNIMPLEMENTED_SYMBOLS].filter((id) => {
+    const def = byId.get(id);
+    if (!def) return false;
+    return (def.values ?? []).length === 0 && (def.sfx ?? []).length === 0 && def.value !== 0;
+  });
+  check(
+    'A 数据链路',
+    '未还原清单只收有行为证据的符号',
+    noEvidence.length === 0,
+    noEvidence.join(','),
+  );
+  info(
+    'A 数据链路',
+    '可抽取符号',
+    `${drawable.size} / ${SHOP_SYMBOLS.length}（${UNIMPLEMENTED_SYMBOLS.size} 张待补行为）`,
+  );
+}
 
 // 棋盘几何：可视 5 列 × 4 行 = 20 格；每列 5 槽 → 符号池上限 25
 check(
@@ -302,6 +353,8 @@ interface Run {
   won: boolean;
   over: boolean;
   rounds: number;
+  /** 是否打进了房东战（12 期付完即进） */
+  boss: boolean;
   issues: string[];
 }
 
@@ -335,9 +388,10 @@ function playOnce(seed: number): Run {
     closeShop(g);
   };
 
-  for (let round = 1; round <= 12; round += 1) {
+  // 12 期普通楼层之后紧接房东战（原版 boss_fight_1），所以这里跑到真正结束为止
+  for (let round = 1; round <= 40 && !g.won && !g.over; round += 1) {
     rounds = round;
-    while (g.spinsLeft > 0) {
+    while (g.spinsLeft > 0 && !g.won && !g.over) {
       spin(g);
       if (g.coins < 0) issues.push('金币为负');
       if (!Number.isFinite(g.lastSpinOutput)) issues.push('产出非有限');
@@ -350,13 +404,13 @@ function playOnce(seed: number): Run {
         break;
       }
     }
+    if (g.won || g.over) break;
     const res = payRent(g);
     if (!res.ok) break;
     if (g.shopOpen) drainShop();
-    if (g.won) break;
   }
 
-  return { won: g.won, over: g.over, rounds, issues };
+  return { won: g.won, over: g.over, rounds, boss: Boolean(g.boss), issues };
 }
 
 const SEEDS = 240;
@@ -373,17 +427,19 @@ check('B 引擎', '破产与通关互斥', runs.every((r) => !(r.won && r.over))
 // 高于 12 期说明租金爬坡失效（该赢的局都被拖成无限局）。
 // 区间上限跟着已还原的机制走：协同（target:adjacent）、销毁两段式、字符串谓词
 // 补齐后，同一套策略能活到第 10 期，上限随之从 9 放宽到 12。
-const deaths = runs.filter((r) => !r.won).map((r) => r.rounds);
+// 破产期数只在「没进房东战」的局里统计，房东战里的期数是 13+ 的另一套曲线
+const deaths = runs.filter((r) => !r.won && !r.boss).map((r) => r.rounds);
 const minDeath = deaths.length ? Math.min(...deaths) : 0;
 const maxDeath = deaths.length ? Math.max(...deaths) : 0;
 check('B 引擎', '破产期落在 3–12 期（曲线未漂移）', minDeath >= 3 && maxDeath <= 12, `${minDeath}–${maxDeath} 期`);
 const rate = wins / SEEDS;
-// 12 期必须真的能打通：通关率 0 说明引擎缺少成长手段，而不是「设计上不可能」。
-check('B 引擎', '12 期可达（基线内存在通关局）', wins > 0, `${wins}/${SEEDS}`);
+const reachedBoss = runs.filter((r) => r.boss).length;
+// 12 期必须真的能打通：付满 12 期的局会直接进房东战（原版 boss_fight_1）
+check('B 引擎', '12 期可达（基线内能进房东战）', reachedBoss > 0, `${reachedBoss}/${SEEDS}`);
 check('B 引擎', '通关不是送分（通关率 < 40%）', rate < 0.4, `${(rate * 100).toFixed(1)}%`);
 info('B 引擎', '基线通关率', `${(rate * 100).toFixed(1)}% · ${deathAt} 局破产`);
 
-/** 房东之战：通关 → 750 血 → 金币换伤害 → 倒下才算真结局 */
+/** 房东之战：12 期付完自动进入 → 血量按层（13 层 1500）→ 每回合收入即伤害 → 倒下才算真结局 */
 function bossFightIssues(): string[] {
   const issues: string[] = [];
   const g = createGame(1234);
@@ -394,28 +450,36 @@ function bossFightIssues(): string[] {
 
   const pay = payRent(g);
   if (!pay.ok) issues.push('第 12 期付租失败');
-  if (!g.won) issues.push('付满 12 期未置通关');
-  if (g.over) issues.push('通关时同时置破产');
-  if (g.shopOpen) issues.push('通关后仍起商店');
+  if (g.won) issues.push('付满 12 期就判通关，没进房东战');
+  if (!g.boss?.active) issues.push('付满 12 期未进入房东战');
+  if (g.over) issues.push('进入房东战时同时置破产');
+  if (!g.mails.some((m) => m.kind === 'boss_fight_1') || !g.mails.some((m) => m.kind === 'boss_fight_2')) {
+    issues.push('未收到房东战两封信');
+  }
 
-  startBossFight(g);
-  if (g.won) issues.push('进入房东战后仍标记通关');
-  if (!g.boss?.active) issues.push('房东战未激活');
-  if (g.boss?.maxHp !== BOSS_HP) issues.push(`房东血量不是 ${BOSS_HP}`);
+  const maxHp = landlordMaxHp(g.floor);
+  if (g.boss?.maxHp !== maxHp) issues.push(`房东血量不是 ${maxHp}`);
   if (g.spinsLeft < 5) issues.push('房东战未补旋转');
+  if (g.finePrintThreshold !== Math.floor(maxHp / 10)) issues.push('细则阈值未跟随血条');
 
-  // 第一刀：旋转用尽 → 付租按钮＝攻击，金币直接换成伤害
+  // 第一刀：本回合收入就是伤害，金币不清零
+  const beforeCoins = g.coins;
+  dealBossDamage(g, 300);
+  if (g.boss?.hp !== maxHp - 300) issues.push(`伤害未结算 ${g.boss?.hp}`);
+  if (g.coins !== beforeCoins) issues.push('打房东不该扣金币');
+  if (g.finePrintCounter >= g.finePrintThreshold) issues.push(`细则计数未按伤害结算 ${g.finePrintCounter}`);
+  const expected = Math.floor(300 / g.finePrintThreshold);
+  if (g.finePrints.length !== expected) issues.push(`300 伤害应换 ${expected} 条细则，实得 ${g.finePrints.length}`);
+
+  // 房东战里按期付租（第 13 期 1000），不能误判为通关
   g.spinsLeft = 0;
-  g.coins = 300;
-  if (!payRent(g).ok) issues.push('房东战攻击失败');
-  if (g.boss?.hp !== BOSS_HP - 300) issues.push(`伤害未结算 ${g.boss?.hp}`);
-  if (g.coins !== 0) issues.push('攻击后金币未清零');
-  if (g.spinsLeft !== 5) issues.push('未击杀未补旋转');
+  const paidBefore = g.rentPaid;
+  if (!payRent(g).ok) issues.push('房东战付租失败');
+  if (g.won) issues.push('房东战付租误判通关');
+  if (g.rentPaid !== paidBefore + 1) issues.push('房东战付租未推进期数');
 
   // 收尾一刀：血量归零 → 房东倒下、置通关
-  g.spinsLeft = 0;
-  g.coins = BOSS_HP;
-  payRent(g);
+  dealBossDamage(g, g.boss?.hp ?? 0);
   if (g.boss?.active) issues.push('血量归零后房东仍存活');
   if (!g.won) issues.push('击败房东未置通关');
   if (g.over) issues.push('击败房东时同时置破产');
@@ -424,6 +488,96 @@ function bossFightIssues(): string[] {
 
 const bossIssues = bossFightIssues();
 check('B 引擎', '房东战流程闭环', bossIssues.length === 0, bossIssues.slice(0, 3).join(' · '));
+check('B 引擎', '房东战租金 500 + (期数-12)*500', bossRent(13) === 1000 && bossRent(14) === 1500, '');
+
+/* ── 楼层（Pop-up.current_floor）：开局选定、一局不变、决定租金加成 ── */
+
+function floorRun(floor: number): { total: number; floorAfter: number } {
+  const g = createGame(77, 'normal', floor);
+  let total = 0;
+  for (let i = 0; i < 12; i += 1) {
+    g.spinsLeft = 0;
+    g.coins = 1_000_000;
+    const before = g.coins;
+    payRent(g);
+    total += before - g.coins;
+  }
+  return { total, floorAfter: g.floor };
+}
+
+const floorTotals: Record<number, number> = {
+  1: 4277,
+  2: 4302,
+  3: 4327,
+  5: 4327,
+  6: 4352,
+  7: 4352,
+  8: 4377,
+  13: 4377,
+  14: 4377,
+  17: 4377,
+  18: 4402,
+  20: 4402,
+};
+const floorBad = Object.entries(floorTotals).filter(([f, want]) => {
+  const got = floorRun(Number(f));
+  return got.total !== want || got.floorAfter !== Number(f);
+});
+check(
+  'B 引擎',
+  '楼层加成生效且楼层不再随付租漂移（1/2/3-5/6-7/8-17/18-20）',
+  floorBad.length === 0,
+  floorBad.map(([f]) => `第 ${f} 层=${floorRun(Number(f)).total}`).join(' · '),
+);
+check(
+  'B 引擎',
+  '房东血量按楼层 750 / 1000 / 1500',
+  landlordMaxHp(1) === 750 && landlordMaxHp(11) === 1000 && landlordMaxHp(13) === 1500,
+  `${landlordMaxHp(1)}/${landlordMaxHp(11)}/${landlordMaxHp(13)}`,
+);
+check(
+  'B 引擎',
+  '第 7/8/9/10/11 期分别 +25 的楼层门槛是 2/3/18/6/8',
+  rentFor(1, 7).rent === 350 &&
+    rentFor(2, 7).rent === 375 &&
+    rentFor(2, 8).rent === 425 &&
+    rentFor(3, 8).rent === 450 &&
+    rentFor(13, 9).rent === 575 &&
+    rentFor(18, 9).rent === 600 &&
+    rentFor(5, 10).rent === 625 &&
+    rentFor(6, 10).rent === 650 &&
+    rentFor(7, 11).rent === 675 &&
+    rentFor(8, 11).rent === 700,
+  [1, 2, 3, 18, 6, 8].map((f) => `F${f}:${rentFor(f, 7).rent}/${rentFor(f, 9).rent}`).join(' '),
+);
+
+/** Reel.symbol_removal_effects：道具吃符号、细则 20/21 例外 */
+function removalIssues(): string[] {
+  const issues: string[] = [];
+  const egg = SYMBOLS.find((s) => s.id === 'egg')!;
+  const carton = ITEMS.find((s) => s.id === 'egg_carton')!;
+  const g = createGame(321);
+  for (const col of g.reels) for (const cell of col) cell.def = null;
+  g.pool.length = 0;
+  g.reels[0]![0]!.def = egg;
+  g.reels[1]![0]!.def = egg;
+  g.pool.push(egg, egg);
+  g.items.push({ def: carton, count: 1 });
+  applySymbolRemovalItems(g);
+  if (g.items[0]?.savedValue !== 2) issues.push(`egg_carton 未累积 ${g.items[0]?.savedValue}`);
+  if (g.pool.length !== 0) issues.push(`池未同步 ${g.pool.length}`);
+
+  // 细则 21 生效时不再吃 egg
+  g.finePrints.push({ num: 21, name: '细则 21', values: [] });
+  g.reels[0]![0]!.def = egg;
+  g.pool.push(egg);
+  applySymbolRemovalItems(g);
+  if (g.reels[0]![0]!.def?.id !== 'egg') issues.push('细则 21 生效时仍吃掉 egg');
+  return issues;
+}
+
+const removal = removalIssues();
+check('B 引擎', '道具吃符号（含细则 20/21 例外）', removal.length === 0, removal.slice(0, 3).join(' · '));
 
 /* ── 三种代币（原版 reroll / removal / essence）── */
 
@@ -516,8 +670,7 @@ carry.coins = 100000;
 payRent(carry);
 check('B 引擎', '付租后未用精华作废', carry.essenceTokens === 0, `e=${carry.essenceTokens}`);
 
-const dudRun = createGame(3);
-dudRun.floor = 10;
+const dudRun = createGame(3, 'normal', 10);
 dudRun.rentPaid = 3;
 dudRun.totalSpins = 25;
 const dudBefore = dudRun.pool.filter((d) => d.id === 'dud').length;
@@ -564,13 +717,26 @@ for (let i = 0; i < 3; i += 1) {
 }
 check(
   'B 引擎',
-  '第 3 期同伴来信：三种代币按第 4 层档位入账',
+  '第 3 期同伴来信：三种代币按第 1 层档位入账',
   comradeRun.rentPaid === 3 &&
     comradeRun.rerollTokens === 2 &&
-    comradeRun.removalTokens === 1 &&
+    comradeRun.removalTokens === 2 &&
     comradeRun.essenceTokens === 2 &&
     comradeRun.mails.some((m) => m.kind === 'init_comrade_help'),
   `tokens=${comradeRun.rerollTokens}/${comradeRun.removalTokens}/${comradeRun.essenceTokens} mails=${comradeRun.mails.map((m) => m.kind).join(',')}`,
+);
+
+const highRun = createGame(23, 'normal', 16);
+highRun.coins = 100000;
+for (let i = 0; i < 3; i += 1) {
+  highRun.spinsLeft = 0;
+  payRent(highRun);
+}
+check(
+  'B 引擎',
+  '第 16 层同伴代币 1/1/1（comrade_values 楼层缩放）',
+  highRun.rerollTokens === 1 && highRun.removalTokens === 1 && highRun.essenceTokens === 1,
+  `tokens=${highRun.rerollTokens}/${highRun.removalTokens}/${highRun.essenceTokens}`,
 );
 
 comradeRun.spinsLeft = 0;
@@ -634,7 +800,8 @@ check(
 
 /* ── C. 交互键位 ── */
 
-const srcFiles = ['main.ts', 'game.ts', 'views.ts'].map((f) =>
+// views.ts 是分析页的静态渲染模块，已不再挂到界面，只在 A 段做措辞检查
+const srcFiles = ['main.ts', 'game.ts'].map((f) =>
   fs.readFileSync(path.join(WEB, 'src', f), 'utf8'),
 );
 const allSrc = srcFiles.join('\n');
@@ -645,6 +812,19 @@ const actionsInMarkup = new Set(
 const handled = new Set([...allSrc.matchAll(/case '([a-zA-Z-]+)':/g)].map((m) => m[1]));
 
 const deadKeys = [...actionsInMarkup].filter((a) => !handled.has(a));
+// 移除语义：被移除的符号要先结算自己的 {removed:true} 声明再消失（牡蛎掉珍珠）
+{
+  const st = createGame(4242, 'normal', 1);
+  st.removalTokens = 9;
+  st.reels[0][1] = createCell(symbol('oyster')!);
+  st.pool.push(symbol('oyster')!);
+  st.cells = visibleCells(st.reels);
+  const before = st.cells.filter((c) => c.def?.id === 'pearl').length;
+  removeSymbolAt(st, 0);
+  const after = st.cells.filter((c) => c.def?.id === 'pearl').length;
+  check('B 引擎', '牡蛎被移除时掉珍珠', after > before, `珍珠 ${before} → ${after}`);
+}
+
 check('C 交互', '所有 data-action 都有 handler', deadKeys.length === 0, deadKeys.join(','));
 
 const deadCases = [...handled].filter((a) => !actionsInMarkup.has(a));

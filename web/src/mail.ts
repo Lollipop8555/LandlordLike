@@ -14,9 +14,14 @@ export type MailKind =
   | 'removal_token_prompt'
   | 'rent_increase'
   | 'boss_fight_1'
+  | 'boss_fight_2'
   | 'intro'
   | 'ending'
-  | 'game_over';
+  | 'game_over'
+  // 以下三种来自原版邮件表（res://JSON/Emails - JSON.json）：细则通知、付清 12 期、道具栏说明
+  | 'fine_print'
+  | 'win'
+  | 'inventory';
 
 export interface MailReward {
   reroll: number;
@@ -187,21 +192,21 @@ export function introMail(mode: 'normal' | 'sandbox' | 'endless', turn: number):
   return mail('intro', FROM_LANDLORD, '房东的第一封信', lines.join('\n\n'), turn);
 }
 
-/** 通关后的收尾信（ending） */
+/** 房东倒下后的收尾信（ending） */
 export function endingMail(ctx: { rent: number; totalEarned: number; turn: number }): Mail {
   return mail(
     'ending',
     FROM_LANDLORD,
-    '12 期，付清了',
+    '这栋楼归你了',
     [
       `最后一期租金 ${ctx.rent}，本局累计产出 ${ctx.totalEarned}。`,
-      '你没被赶出去。成就与统计已经写进本地存档——之后还可以挑战房东本人。',
+      '我倒了。房租、纸条、那些破规则，都归你了。成就与统计已经写进本地存档。',
     ].join('\n\n'),
     ctx.turn,
   );
 }
 
-/** 房东亲自下场（官方 id：boss_fight_1） */
+/** 房东亲自下场（官方 id：boss_fight_1，Pop-up__Pop-up.gd:560-570） */
 export function bossMail(hp: number, turn: number): Mail {
   return mail(
     'boss_fight_1',
@@ -209,13 +214,77 @@ export function bossMail(hp: number, turn: number): Mail {
     '房东亲自下场',
     [
       '12 期租金你都付清了，所以我亲自来。',
-      `我的血量 ${hp}。你攒的每一个金币都会变成伤害——点下面的攻击按钮，把金币全部砸过来。`,
+      `我的血量 ${hp}。别想着跑——这一场打完，这栋楼才算有个结果。`,
+    ].join('\n\n'),
+    turn,
+  );
+}
+
+/** 战斗规则（官方 id：boss_fight_2，Pop-up__Pop-up.gd:605-615） */
+export function bossFightMail2(hp: number, turn: number): Mail {
+  return mail(
+    'boss_fight_2',
+    FROM_LANDLORD,
+    '那就开打',
+    [
+      `我站在这儿，${hp} 点血，一回合比一回合更恼火。`,
+      '你每转赚到的金币会同时打进我的血条，一个子儿都不会留在你口袋里；租金照付，付不出来就滚出去。',
+      '打空我的血，这栋楼归你。',
+    ].join('\n\n'),
+    turn,
+  );
+}
+
+/**
+ * 新细则生效的通知信（原版邮件 kind：fine_print）。
+ * 原版在拿到细则时发一封信把纸条塞进信箱，这里同样把编号、名字和数值写进正文；
+ * 同类信只留最新一封（addMail 按 kind 去重），所以信箱不会被子规则堆满。
+ */
+export function finePrintMail(ctx: {
+  num: number;
+  name?: string;
+  values: number[];
+  dynamicIcon?: string;
+  turn: number;
+}): Mail {
+  const lines = [`细则 #${ctx.num}「${ctx.name ?? `细则 ${ctx.num}`}」从下回转开始生效。`];
+  if (ctx.values.length > 0) lines.push(`这条的数值：${ctx.values.join(' / ')}。`);
+  if (ctx.dynamicIcon) lines.push(`它盯上的符号：${tagOf(ctx.dynamicIcon)}。`);
+  lines.push('细则不需要你操作，会自动叠到结算上；想不起来自己有哪些，随时点开左侧的细则列表。');
+  return mail('fine_print', FROM_LANDLORD, `细则 #${ctx.num}`, lines.join('\n\n'), ctx.turn);
+}
+
+/** 付清 12 期（原版邮件 kind：win）：房东还没认输，但欠条已经付完一轮 */
+export function winMail(ctx: { period: number; rent: number; totalEarned: number; turn: number }): Mail {
+  return mail(
+    'win',
+    FROM_LANDLORD,
+    '12 期付清了',
+    [
+      `第 ${ctx.period} 期租金 ${ctx.rent} 也付清了。按租约，你本来该拿钥匙了。`,
+      `本局累计产出 ${ctx.totalEarned}。不过你别急着搬家——我打算亲自来一趟。`,
+    ].join('\n\n'),
+    ctx.turn,
+  );
+}
+
+/** 第一次买到道具：介绍道具栏（原版邮件 kind：inventory） */
+export function inventoryMail(turn: number): Mail {
+  return mail(
+    'inventory',
+    FROM_HOUSE,
+    '关于你刚买的道具',
+    [
+      '道具不进牌库，直接生效，永久留在这一局里。',
+      '同一种道具再买一次会叠层（右上角的 ×2、×3），叠得越高效果越强。',
+      '💎 精华代币可以把它升级成精华版：点道具图标 →「精华化」。付租时没花掉的精华会被房东收走。',
     ].join('\n\n'),
     turn,
   );
 }
 
 /** 破产（game_over） */
+
 export function gameOverMail(ctx: { period: number; rent: number; coins: number; turn: number }): Mail {
   return mail(
     'game_over',

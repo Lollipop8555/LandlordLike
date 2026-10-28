@@ -12,9 +12,11 @@ export const xOf = (i: number): number => i % COLS;
 export const yOf = (i: number): number => Math.floor(i / COLS);
 
 /**
- * 8 邻域偏移。fine print #22 会禁用斜向 → diagonal=false 时退化为 4 邻域。
+ * 8 邻域偏移。`diagonal=false` 退化为 4 邻域（上下左右）；
+ * `skipVertical=true` 去掉正上/正下（细则 22：Slot_Icon__Slot_Icon.gd:1184-1191 跳过 n==1 与 n==7）。
  */
-export function neighborsOf(i: number, diagonal = true): number[] {
+export function neighborsOf(i: number, opts: { diagonal?: boolean; skipVertical?: boolean } = {}): number[] {
+  const { diagonal = true, skipVertical = false } = opts;
   const x = xOf(i);
   const y = yOf(i);
   const out: number[] = [];
@@ -22,6 +24,7 @@ export function neighborsOf(i: number, diagonal = true): number[] {
     for (let dx = -1; dx <= 1; dx += 1) {
       if (dx === 0 && dy === 0) continue;
       if (!diagonal && dx !== 0 && dy !== 0) continue;
+      if (skipVertical && dx === 0) continue;
       const nx = x + dx;
       const ny = y + dy;
       if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;

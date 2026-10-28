@@ -72,6 +72,24 @@ export interface PrevIdentity {
   valueMultiplier: number;
 }
 
+/**
+ * 本局生效的一条细则（Landlord__Landlord.gd 的 fine_print）。
+ * `values` 是细则自身的参数（数据见 data/fine_print.csv），
+ * `dynamicIcon` 是细则指定的符号（Slot_Icon__Slot_Icon.gd:3697 的 fp.dynamic_icon）。
+ */
+export interface FinePrintState {
+  num: number;
+  name?: string;
+  values: number[];
+  dynamicIcon?: string;
+}
+
+/** Pop-up.rarity_bonuses：按稀有度修正的抽取权重（符号 / 道具两套） */
+export interface RarityBonus {
+  symbols: Partial<Record<Rarity, number>>;
+  items: Partial<Record<Rarity, number>>;
+}
+
 /** add_effect 的 diff 值：字面量，或需要求值的引用 */
 export type EffectValue =
   | number
@@ -110,7 +128,35 @@ export interface EffectRule {
    * cond：add_to_cond_effects，挂到满足 comparisons 的目标符号上（Item__Item.gd:1274）
    */
   kind?: 'self' | 'cond';
+  /**
+   * tiles_to_add：这一转往空格里生成符号（源码 Slot_Icon.gd:1768-1870）。
+   * 生成物与本盘其他符号一样参与本转结算，并留在棋盘上打后续期数。
+   */
+  spawn?: SpawnSpec[];
+  /**
+   * stat_to_change / stat_diff：落一条声明就累加一次彩蛋统计（Slot_Icon.gd:3719 摸狗、
+   * 4029 扎罗夫杀人、4653/4655 酒精……）。这些计数是原版彩蛋成就的唯一依据，
+   * 以前整段被丢弃，对应成就永远判不出来。
+   */
+  stats?: StatSpec[];
   flags: string[];
+}
+
+/** 一条彩蛋统计增量：`k` 对应 Stats 里的字段，`d` 是每次触发加多少 */
+export interface StatSpec {
+  key: string;
+  diff?: EffectValue;
+}
+
+/** 一条生成声明：按 id（type）或按分组（group，可带稀有度下限）取符号 */
+export interface SpawnSpec {
+  type?: string;
+  /** 分组名，如 gem / booze；运行时在同组符号里等概率抽 */
+  group?: string;
+  /** 分组抽取的稀有度下限（源码里来自 x_ray 道具，本仓库取无道具档） */
+  minRarity?: string;
+  /** 生成几个：字面量 1，或 {"$self_index":N} 取自身 values[N] */
+  count?: EffectValue;
 }
 
 export interface Cell {
@@ -183,6 +229,8 @@ export interface Cell {
   destroyCounters?: number;
   /** indestructible：不可被摧毁 */
   indestructible?: boolean;
+  /** can_be_removed：能否被「移除代币」拿掉（细则 20/21/36 会关掉） */
+  canBeRemoved?: boolean;
   /** item_count：符号自身记录的道具计数（lucky_seven 类） */
   itemCount?: number;
   /** rarity：符号本体的稀有度覆盖 */

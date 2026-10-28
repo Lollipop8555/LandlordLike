@@ -105,14 +105,18 @@ function buildPool(name, effectsById) {
   });
 }
 
-/** 道具的声明效果（analysis/lbal_item_rules.py 产出） */
+/**
+ * 道具的声明效果（analysis/lbal_item_rules.py 产出）。
+ * 标签选择器之外的 `<outside>` 块（Item__Item.gd:1836-1863）是按细则号修正
+ * 道具自身 `value` 的模板，不属于任何一个道具，单独放到 *itemfineprint*。
+ */
 function itemEffects() {
   const map = new Map();
+  const outside = [];
   for (const r of readObjects('item_effects.csv')) {
     const flags = r.flags ? r.flags.split(';') : [];
     const kind = flags.find((f) => f.startsWith('kind:'))?.slice(5) ?? 'self';
-    const rule = {
-      symbol: r.item,
+    const base = {
       branchLine: Number.parseInt(r.branch_line, 10) || 0,
       line: Number.parseInt(r.line, 10) || 0,
       comparisons: JSON.parse(r.comparisons || '[]'),
@@ -121,6 +125,11 @@ function itemEffects() {
       kind,
       flags: flags.filter((f) => !f.startsWith('kind:')),
     };
+    if (String(r.item).trim() === '<outside>') {
+      outside.push({ i: outside.length, symbol: '*itemfineprint*', ...base });
+      continue;
+    }
+    const rule = { symbol: r.item, ...base };
     // 源码里多个道具共用同一段分支（`"pool_ball", "horseshoe", "bowling_ball", ...:`），
     // 解析后 item 记作 `a|b|c`；必须按 id 拆开登记，否则这些道具查不到自己的声明。
     for (const id of String(r.item).split('|')) {
@@ -131,7 +140,7 @@ function itemEffects() {
       map.set(key, list);
     }
   }
-  return map;
+  return { map, outside };
 }
 
 /**
@@ -206,6 +215,19 @@ function buildEffects() {
     comparisons: JSON.parse(r.comparisons || '[]'),
     vtc: r.vtc || '',
     diff: JSON.parse(r.diff || 'null'),
+    // 生成：[{type|group, minRarity, count}]，往空格里放符号
+    spawn: r.tiles_to_add
+      ? JSON.parse(r.tiles_to_add).map((s) => ({
+          type: s.type,
+          group: s.group,
+          minRarity: s.min_rarity,
+          count: s.count,
+        }))
+      : undefined,
+    // 彩蛋统计：[{k: 统计名, d: 增量}]，落一条声明就累加一次
+    stats: r.stats
+      ? JSON.parse(r.stats).map((s) => ({ key: s.k, diff: s.d }))
+      : undefined,
     kind: 'self',
     flags: r.flags ? r.flags.split(';') : [],
   }));
@@ -213,8 +235,8 @@ function buildEffects() {
 
 const symbols = buildSymbols();
 const itemEffectMap = itemEffects();
-const items = buildItems(itemEffectMap);
-const essences = buildPool('essences.csv', itemEffectMap);
+const items = buildItems(itemEffectMap.map);
+const essences = buildPool('essences.csv', itemEffectMap.map);
 const finePrint = buildFinePrint();
 const rent = buildRent();
 const rarity = buildRarity();
@@ -236,6 +258,7 @@ write('finePrint.json', finePrint);
 write('rent.json', rent);
 write('rarity.json', rarity);
 write('effects.json', effects);
+write('itemFinePrint.json', itemEffectMap.outside);
 
 const withRarity = symbols.filter((s) => s.rarity);
 console.log(`\n统计：符号 ${symbols.length}（${withRarity.length} 个带稀有度）`

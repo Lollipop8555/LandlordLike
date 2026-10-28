@@ -1,14 +1,32 @@
 // add_effect 声明解释器。
 //
-// 语义：comparisons 描述「相邻符号」要满足的条件，满足一次就对**自身**应用一次效果；
-// comparisons 为空表示无条件对自身应用一次。
-// 只执行符号表与数据表能确定的部分；被 fine_print / items 门控的声明记入 unsupported，
-// 由拆解面板如实展示，不做近似。
-import { EFFECTS, EFFECTS_BY_SYMBOL, SHOP_SYMBOLS, SYMBOL_BY_ID, symbol } from './data';
+// 语义：comparisons 描述条件，满足一次就对**自身**应用一次效果；为空表示无条件应用一次。
+// 三类声明都在这里结算：符号自身、`*global*` 反向加成（拥有者条件 → 相邻格）、
+// `*fineprint*` 细则模板（实例化后按当前细则求值）；道具侧细则见 heldItemValue。
+import {
+  EFFECTS,
+  EFFECTS_BY_SYMBOL,
+  FINE_PRINT_RULES,
+  ITEM_BY_ID,
+  ITEM_FINE_PRINT_RULES,
+  REVERSE_RULES,
+  DRAWABLE_SYMBOLS,
+  SYMBOL_BY_ID,
+  symbol,
+} from './data';
 import { COLS, neighborsOf } from './grid';
 import { groupName, symbolName } from './names';
 import { RARITY_LABEL, RARITY_ORDER } from './types';
-import type { Cell, EffectComparison, EffectRule, EffectValue, Rarity, SymbolDef } from './types';
+import type {
+  Cell,
+  EffectComparison,
+  EffectRule,
+  EffectValue,
+  FinePrintState,
+  Rarity,
+  RarityBonus,
+  SymbolDef,
+} from './types';
 
 /* ── 属性槽位表：value_to_change 的全集 ──
  * Slot_Icon__Slot_Icon.gd 的 add_effect 可以写二十余个属性，这里逐个映射到 Cell 字段，
@@ -103,19 +121,156 @@ const SUPPORTED_PRED = new Set([
   ...NUM_PRED,
 ]);
 
+/** 一条已经算好数量的生成请求（type 与 group 二选一） */
+export interface ResolvedSpawn {
+  type?: string;
+  group?: string;
+  minRarity?: string;
+  count: number;
+}
+
 /** 求值上下文：表达式里可能引用道具栏计数、随机数与网格位置 */
 export interface EvalCtx {
   rand?: () => number;
+  /** 「按数值决定概率」的判定随机源（0–1），与 rand_range 表达式分开，避免扰动产出基线 */
+  chanceRoll?: () => number;
   /** 道具栏里某道具的持有数（Item__Item.gd 的 items[i].item_count） */
   itemCount?: (id: string) => number;
   /** 场上某符号的个数（diff 里的 {"counted_symbols":"diamond"}） */
   count?: (id: string) => number;
   /** Pop-up / Items / Reels 上的全局槽位（compost_heap_symbols_destroyed 等） */
   globalSlot?: (key: string) => number | boolean | null;
+  /**
+   * tiles_to_add：把 count 个符号排进本转的空格队列。
+   * 源码先塞进 reels.symbol_queue（Slot_Icon.gd:1868-1870），
+   * 再在下一轮 update 时 add_tile 到随机空格（Main__Reels.gd:900-940）。
+   */
+  spawn?: (spec: ResolvedSpawn, owner: Cell) => void;
+  /**
+   * stat_to_change：把彩蛋统计（摸狗时长、兔子跳、酒精、斩首、扎罗夫杀人）
+   * 交给调用方累加。引擎只负责记数，落盘与成就判定在外面做。
+   */
+  stat?: (key: string, amount: number) => void;
   /** 本格的网格坐标，供 grid_position_x / grid_position_y 使用 */
   position?: { x: number; y: number };
+  /**
+   * 发出这条声明的格子。源码里销毁会给受害者记一条 destroyed_or_removed_by
+   * （Slot_Icon__Slot_Icon.gd 的 giver 分支），成就「猫喝到牛奶」「熊吃掉蜂蜜」靠它判定。
+   */
+  owner?: Cell;
   /** 相邻非空格数，供 $adj_count 使用 */
   adjacentCount?: number;
+  /** 本局生效的细则（Landlord.fine_print），供 when:fp:N / when:fp_icon 门控使用 */
+  finePrint?: FinePrintState[];
+  /** 正在实例化的那条细则：`fp.values[i]` / `{"$fp":i}` 从它取值 */
+  currentFinePrint?: FinePrintState;
+  /** Pop-up.rarity_bonuses：稀有度权重修正（cat 的幸运猫在这里累乘） */
+  rarityBonus?: RarityBonus;
+  /** 声明带 consumes:<id> 时回调，由引擎把该道具从道具栏移除 */
+  consume?: (id: string) => void;
+}
+
+/**
+ * 声明的生效条件。
+ * 源码里同一段分支常被 if/elif 拆成互斥的几条声明（洒水壶按持有化肥精华 / 化肥 /
+ * 堆肥分档，reroll 在持有 reroll_essence 时不再自己摇骰子）。抽取时把这些
+ * if 条件还原成 when:* 标志，否则几条声明会同时生效、最高档永远先命中。
+ */
+type GateKind =
+  | 'item'
+  | 'no_item'
+  | 'any_item'
+  | 'fp'
+  | 'no_fp'
+  | 'any_fp'
+  | 'group'
+  | 'no_group'
+  | 'any_group'
+  | 'flag'
+  | 'no_flag'
+  | 'fp_icon'
+  | 'no_fp_icon'
+  | 'never';
+type Gate = { kind: GateKind; keys: string[] };
+
+const GATE_RE =
+  /^when:(item|no_item|any_item|fp|no_fp|any_fp|group|no_group|any_group|flag|no_flag|fp_icon|no_fp_icon|never)(?::(.*))?$/;
+
+/** 只认抽取器还原出来的门控标志，其余标志一律忽略 */
+export function gatesOf(rule: EffectRule): Gate[] {
+  const out: Gate[] = [];
+  for (const flag of rule.flags) {
+    const m = GATE_RE.exec(flag);
+    if (!m) continue;
+    const keys = (m[2] ?? '').split(',').map((k) => k.trim()).filter((k) => k.length > 0);
+    out.push({ kind: m[1] as GateKind, keys });
+  }
+  return out;
+}
+
+/**
+ * 符号的分组归属：自身 groups ∪ 历史身份（prev_data）的 groups。
+ * 对应 Slot_Icon__Slot_Icon.gd:3678 的 `t_groups = groups.duplicate(true)`。
+ */
+export function cellGroups(cell: Cell): string[] {
+  const out = new Set<string>(cell.def?.groups ?? []);
+  for (const p of cell.prev) {
+    for (const g of SYMBOL_BY_ID.get(p.symbolId)?.groups ?? []) out.add(g);
+  }
+  return [...out];
+}
+
+function gateHolds(gate: Gate, ctx: EvalCtx, cell: Cell | null): boolean {
+  const fps = ctx.finePrint ?? [];
+  const fpOn = (id: string): boolean => fps.some((fp) => fp.num === Number(id));
+  const held = (id: string): boolean => (ctx.itemCount?.(id) ?? 0) > 0;
+  const groups = cell ? cellGroups(cell) : [];
+  switch (gate.kind) {
+    case 'never':
+      // `if modded` 这类在原版永不成立的分支
+      return false;
+    case 'fp':
+      return gate.keys.every(fpOn);
+    case 'no_fp':
+      return gate.keys.every((k) => !fpOn(k));
+    case 'any_fp':
+      return gate.keys.some(fpOn);
+    case 'item':
+      return gate.keys.every(held);
+    case 'any_item':
+      // 源码写成 `has_unmodded_item("a") or has_unmodded_item("b")`
+      return gate.keys.some(held);
+    case 'group':
+      return gate.keys.every((k) => groups.includes(k));
+    case 'no_group':
+      return gate.keys.every((k) => !groups.includes(k));
+    case 'any_group':
+      return gate.keys.some((k) => groups.includes(k));
+    case 'flag':
+      // 原版恒假：demo（演示模式）/ modded（MOD 符号）/ inherit_effects（MOD 继承）
+      return false;
+    case 'no_flag':
+      return true;
+    case 'fp_icon':
+    case 'no_fp_icon':
+      // 细则是否指定了符号：实例化 *fineprint* 声明时已按当前细则过滤过
+      return true;
+    default:
+      return gate.keys.every((k) => !held(k));
+  }
+}
+
+/** 这条声明此刻是否满足生效条件（分组门控需要 cell 才能求值） */
+export function ruleGatesOk(rule: EffectRule, ctx: EvalCtx = {}, cell: Cell | null = null): boolean {
+  return gatesOf(rule).every((g) => gateHolds(g, ctx, cell));
+}
+
+/** item_to_destroy：结算后要移除的道具 */
+export function consumeOf(rule: EffectRule): string[] {
+  return rule.flags
+    .filter((f) => f.startsWith('consumes:'))
+    .map((f) => f.slice('consumes:'.length))
+    .filter((id) => id.length > 0);
 }
 
 /**
@@ -131,10 +286,16 @@ const GLOBAL_VARS: Record<string, number> = {
 
 /** 把源码里的全局路径改写成求值器认识的形态 */
 function normalizeExpr(raw: string): string {
-  return raw
-    .replace(/\$\s*"\/root\/Main"\.tile_database\.([a-z0-9_]+)\.values\[(\d+)\]/g, '$1.values[$2]')
-    .replace(/\$\s*"\/root\/Main[^"]*"\.[A-Za-z_][A-Za-z0-9_.]*/g, '0')
-    .replace(/\$\s*"\/root\/Main[^"]*"/g, '0');
+  return (
+    raw
+      .replace(/\$\s*"\/root\/Main"\.tile_database\.([a-z0-9_]+)\.values\[(\d+)\]/g, '$1.values[$2]')
+      .replace(/\$\s*"\/root\/Main[^"]*"\.[A-Za-z_][A-Za-z0-9_.]*/g, '0')
+      .replace(/\$\s*"\/root\/Main[^"]*"/g, '0')
+      // `items[item_types.find("lucky_cat")].item_count` → `lucky_cat.item_count`
+      .replace(/items\[\s*item_types\.find\("([a-z0-9_]+)"\)\s*\]/g, '$1')
+      // 道具栏数量的等价写法
+      .replace(/item_types\.find\("([a-z0-9_]+)"\)/g, '"$1"')
+  );
 }
 
 /** 小型表达式求值器：只支持源码里出现过的语法子集，不用 eval */
@@ -236,12 +397,14 @@ function evalExpr(rawSrc: string, self: Cell, ctx: EvalCtx): number | null {
         return idx === null ? null : (self.def?.values[idx] ?? 0);
       }
       if (name === 'fp.values') {
-        // fine_print 未激活时细则值为 0，与原作起始状态一致
-        return 0;
+        // 细则自身的参数；细则未激活时与原作起始状态一致，取 0
+        return idx === null ? null : (ctx.currentFinePrint?.values[idx] ?? 0);
       }
       if (name.endsWith('.values')) {
+        // 符号或道具的静态 values（`lucky_cat.values[0]` 读的是道具）
         const id = name.slice(0, -'.values'.length);
-        return idx === null ? 0 : (SYMBOL_BY_ID.get(id)?.values[idx] ?? 0);
+        const def = SYMBOL_BY_ID.get(id) ?? ITEM_BY_ID.get(id);
+        return idx === null ? 0 : (def?.values[idx] ?? 0);
       }
       if (name === 'item_count') return self.itemCount ?? 0;
       if (name.endsWith('.item_count')) return ctx.itemCount?.(name.slice(0, -'.item_count'.length)) ?? 0;
@@ -328,7 +491,7 @@ function evalValue(v: EffectValue, self: Cell, ctx: EvalCtx = {}): number | stri
     return SYMBOL_BY_ID.get(String(o.$ref_value))?.value ?? 0;
   }
   if ('$adj_count' in o) return ctx.adjacentCount ?? 0;
-  if ('$fp' in o) return 0;
+  if ('$fp' in o) return ctx.currentFinePrint?.values[Number(o.$fp)] ?? 0;
   // {"counted_symbols":"diamond"}：场上该符号的个数
   if ('counted_symbols' in o) return ctx.count?.(String(o.counted_symbols)) ?? 0;
   // {"forced_rarity":..., "or_better":...}：强制稀有度，取数组首项；缺失时按 0 处理
@@ -412,10 +575,9 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
       b /= div;
     }
   }
-  if (b === null) return false;
-
   // a 为 null：谓词名由 dynamic_a_key 给出；目标在 Pop-up / Items 上时读全局槽位
   if (comp.a === null && typeof raw.dynamic_a_key === 'string') {
+    if (b === null) return false;
     const key = raw.dynamic_a_key;
     const actual = ctx.globalSlot?.(key) ?? readSlot(other, key) ?? 0;
     if (typeof actual === 'boolean') return actual === Boolean(b);
@@ -423,6 +585,21 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
   }
 
   const a = predName(comp);
+
+  // 原版 rand 条件（Item__Item.gd:1582-1587）：b 是每格现抽的 rand_range(0,100)，
+  // 值 ≥ 随机数时成立，也就是「数值越高越容易触发」。数据里 b 记作 "rand_num"，
+  // 求值时按随机阈值处理，所以放在 b 是否为 null 的检查之前。
+  if (raw.rand) {
+    const threshold = (ctx.chanceRoll?.() ?? 0.5) * 100;
+    if (a === 'values') {
+      const slot = Number(comp.value_num ?? 0);
+      return (other.def?.values[slot] ?? 0) + (other.valueBonus ?? 0) >= threshold;
+    }
+    if (a === 'value_bonus') return (other.valueBonus ?? 0) >= threshold;
+    return false;
+  }
+
+  if (b === null) return false;
 
   if (NUM_PRED.has(a)) {
     if (typeof b !== 'number') return false;
@@ -497,6 +674,18 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
   }
 }
 
+/** bonus_value_num：本条声明写进 value_bonus_arr / value_multiplier_arr 的哪个下标 */
+function slotOf(rule: EffectRule, self: Cell, ctx: EvalCtx): number | null {
+  const raw = rule.flags.find((f) => f.startsWith('slot:'))?.slice('slot:'.length);
+  if (!raw) return null;
+  try {
+    const n = Number(evalValue(JSON.parse(raw) as EffectValue, self, ctx));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 function applyTo(cell: Cell, rule: EffectRule, diff: number | string | boolean, ctx: EvalCtx = {}): void {
   const n = Number(diff);
   const num = Number.isFinite(n) ? n : 0;
@@ -524,20 +713,56 @@ function applyTo(cell: Cell, rule: EffectRule, diff: number | string | boolean, 
     case 'flat_value_bonus':
       cell.flatValueBonus = (cell.flatValueBonus ?? 0) + num;
       return;
-    case 'bonus_values':
-      cell.bonusValues = [...(cell.bonusValues ?? []), num];
+    case 'bonus_values': {
+      // bonus_value_num 指定槽位（chicken_coop 两条声明只差下标）；缺省则追加
+      const arr = [...(cell.bonusValues ?? [])];
+      const slot = slotOf(rule, cell, ctx);
+      if (slot === null) arr.push(num);
+      else {
+        while (arr.length <= slot) arr.push(0);
+        arr[slot] = rule.flags.includes('overwrite') ? num : arr[slot] + num;
+      }
+      cell.bonusValues = arr;
       return;
-    case 'bonus_value_multipliers':
-      cell.bonusValueMultipliers = [...(cell.bonusValueMultipliers ?? []), num || 1];
+    }
+    case 'bonus_value_multipliers': {
+      const arr = [...(cell.bonusValueMultipliers ?? [])];
+      const slot = slotOf(rule, cell, ctx);
+      const val = num || 1;
+      if (slot === null) arr.push(val);
+      else {
+        while (arr.length <= slot) arr.push(1);
+        arr[slot] = rule.flags.includes('overwrite') ? val : arr[slot] * val;
+      }
+      cell.bonusValueMultipliers = arr;
       return;
+    }
     case 'destroyed':
       // 不可破坏的符号挡下销毁（Slot_Icon__Slot_Icon.gd:3222-3229 会补 indestructible=false 条件）。
       // 先打 tbd 标记：本转照常计分，结算走完才落地成 destroyed 并从池中移除
       // （Slot_Icon__Slot_Icon.gd:2394-2405），这样「被摧毁后 value_bonus」的分支才有机会触发。
-      if (diff === true && !cell.indestructible && cell.def && !cell.destroyed) cell.tbd = true;
+      if (diff === true && !cell.indestructible && cell.def && !cell.destroyed) {
+        cell.tbd = true;
+        // 记下凶手（同类声明重复触发时不覆盖第一条），供成就与「被谁摧毁后…」分支使用。
+        // 自己摧毁自己不算「被谁摧毁」，否则 destroyed_or_removed_by 会退化成自指。
+        if (!cell.destroyedOrRemovedBy && ctx.owner && ctx.owner !== cell) {
+          cell.destroyedOrRemovedBy = ctx.owner.def?.id ?? '';
+        }
+      }
       return;
     case 'destroyed_or_removed_by':
       cell.destroyedOrRemovedBy = String(diff);
+      return;
+    case 'removed':
+      // 「移除」和「摧毁」是两条路：移除不打 tbd、不进摧毁计数，但同样要标记一下，
+      // 让被移除符号自己的 {removed:true} 声明还能结算（牡蛎掉珍珠、
+      // 沙币/水母/河豚的移除加成），结算完再从棋盘上抹掉。
+      if (diff === true && !cell.removed && cell.canBeRemoved !== false && cell.def && cell.def.id !== 'empty') {
+        cell.removed = true;
+        if (!cell.destroyedOrRemovedBy && ctx.owner && ctx.owner !== cell) {
+          cell.destroyedOrRemovedBy = ctx.owner.def?.id ?? '';
+        }
+      }
       return;
     case 'type': {
       // 变形目标可以是字面量，也可以是「从 group 里按 min_rarity 随机选一个」
@@ -547,12 +772,17 @@ function applyTo(cell: Cell, rule: EffectRule, diff: number | string | boolean, 
       if (!target && typeof group === 'string') {
         const minRaw = rule.flags.find((f) => f.startsWith('min_rarity:'))?.slice('min_rarity:'.length);
         const minIdx = minRaw ? RARITY_ORDER.indexOf(minRaw as Rarity) : 0;
-        const pool = SHOP_SYMBOLS.filter(
+        // 变形目标同样不能落到「行为未还原」的符号上，否则种子会种出一张白板
+        const pool = DRAWABLE_SYMBOLS.filter(
           (s) => s.groups.includes(group) && RARITY_ORDER.indexOf(s.rarity as Rarity) >= minIdx,
         );
-        if (pool.length) target = pool[Math.floor((ctx.rand?.() ?? 0.5) * pool.length)].id;
+        if (pool.length) {
+          const roll = ctx.chanceRoll?.() ?? ctx.rand?.() ?? 0.5;
+          target = pool[Math.floor(roll * pool.length)].id;
+        }
       }
-      if (!target) return;
+      // 已判定摧毁的格子不再变形，否则清理时按 id 回池会找不到对应条目
+      if (!target || cell.destroyed || cell.tbd) return;
       const old = cell.def;
       if (old) {
         cell.prev.push({
@@ -573,6 +803,14 @@ function applyTo(cell: Cell, rule: EffectRule, diff: number | string | boolean, 
     case 'uncommon':
     case 'rare':
     case 'very_rare': {
+      // raritymod：改的是 Pop-up.rarity_bonuses（该稀有度的出现权重），不是符号自身槽位
+      if (rule.flags.includes('raritymod') && ctx.rarityBonus) {
+        const bucket = rule.flags.includes('item_target') ? ctx.rarityBonus.items : ctx.rarityBonus.symbols;
+        const key = rule.vtc as Rarity;
+        const cur = bucket[key] ?? (rule.flags.includes('multiply') ? 1 : 0);
+        bucket[key] = rule.flags.includes('multiply') ? cur * (num || 1) : cur + num;
+        return;
+      }
       const mod = cell.rarityMod ?? {};
       mod[rule.vtc] = (mod[rule.vtc] ?? 0) + num;
       cell.rarityMod = mod;
@@ -626,11 +864,14 @@ export const RULE_STATUS_LABEL: Record<RuleStatus, string> = {
 
 /** 一条声明在本引擎里处于什么状态（拆解面板与解释器共用同一判定） */
 export function ruleStatus(rule: EffectRule): RuleStatus {
-  // 源码里的默认分支/占位分支：既不设属性也不给值，本身不产生任何操作
-  if (!rule.vtc && rule.diff === null) return 'noop';
+  // tiles_to_add 类声明不设属性、只生成符号（Slot_Icon.gd:1768-1870）
+  const spawnOnly = !rule.vtc && rule.diff === null && (rule.spawn?.length ?? 0) > 0;
+  // 源码里的默认分支/占位分支：既不设属性也不给值、也不生成，本身不产生任何操作
+  if (!rule.vtc && rule.diff === null && !spawnOnly) return 'noop';
   if (rule.flags.some((f) => f.startsWith('gated:'))) return 'gated';
-  if (!SUPPORTED_VTC.has(rule.vtc)) return 'unsupported_vtc';
+  if (!spawnOnly && !SUPPORTED_VTC.has(rule.vtc)) return 'unsupported_vtc';
   if (rule.comparisons.some((c) => !isSupportedPred(c))) return 'unsupported_pred';
+  if (spawnOnly) return 'executable';
   // diff 为 null 但声明带 group/min_rarity 时，效果是「从该分组随机变形成稀有度达标的符号」，
   // 不需要 diff 也能执行（Slot_Icon__Slot_Icon.gd 的 seed → plant 分支）。
   if (rule.diff === null) {
@@ -653,6 +894,132 @@ export function ruleStatus(rule: EffectRule): RuleStatus {
  *  · value_to_change 为 destroyed 时，前置补「目标不可破坏 = false」
  * 例外（无比较、from_item、unconditional、特定 giver）按源码跳过。
  */
+function fpGateHolds(gate: Gate, fp: FinePrintState): boolean {
+  switch (gate.kind) {
+    case 'fp':
+      return gate.keys.every((k) => Number(k) === fp.num);
+    case 'no_fp':
+      return gate.keys.every((k) => Number(k) !== fp.num);
+    case 'any_fp':
+      return gate.keys.some((k) => Number(k) === fp.num);
+    default:
+      return true;
+  }
+}
+
+/**
+ * 把 `*fineprint*` 模板绑定到一条具体细则上（Slot_Icon__Slot_Icon.gd:3696-3729）。
+ * `fp.dynamic_icon` 在源码里是运行时值，这里替换成该细则抽到的符号；
+ * `fp.values[i]` 交给 EvalCtx.currentFinePrint 求值。
+ */
+function instantiateFinePrint(rule: EffectRule, fp: FinePrintState): EffectRule {
+  const subst = (v: EffectValue): EffectValue => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+    const o = v as Record<string, unknown>;
+    if (typeof o.$fp === 'number') return { $dyn: String(fp.values[o.$fp] ?? 0) };
+    if (typeof o.$dyn === 'string') {
+      const expr = o.$dyn.replace(/fp\.values\[(\d+)\]/g, (_, k: string) => String(fp.values[Number(k)] ?? 0));
+      return { $dyn: expr };
+    }
+    return v;
+  };
+  const comparisons = rule.comparisons.map((c) => {
+    const b = c.b as unknown;
+    if (b && typeof b === 'object' && !Array.isArray(b) && (b as Record<string, unknown>).$dyn === 'fp.dynamic_icon') {
+      return { ...c, b: fp.dynamicIcon ?? '' } as EffectComparison;
+    }
+    return { ...c, b: subst(c.b) as EffectComparison['b'] };
+  });
+  return { ...rule, comparisons, diff: subst(rule.diff as EffectValue), i: (rule.i ?? 0) * 1000 + fp.num };
+}
+
+/** 当前生效细则展开出的声明；细则未生效时为空 */
+function finePrintRulesFor(ctx: EvalCtx): EffectRule[] {
+  const fps = ctx.finePrint ?? [];
+  if (fps.length === 0) return [];
+  const out: EffectRule[] = [];
+  for (const rule of FINE_PRINT_RULES) {
+    const gates = gatesOf(rule);
+    const wantsIcon = gates.some((g) => g.kind === 'fp_icon');
+    const rejectsIcon = gates.some((g) => g.kind === 'no_fp_icon');
+    for (const fp of fps) {
+      if (!gates.every((g) => fpGateHolds(g, fp))) continue;
+      // `if fp.dynamic_icon != null ... else ...` 两个分支互斥
+      if (wantsIcon && !fp.dynamicIcon) continue;
+      if (rejectsIcon && fp.dynamicIcon) continue;
+      out.push(instantiateFinePrint(rule, fp));
+    }
+  }
+  return out;
+}
+
+/** 道具侧的细则模板：与符号侧同构，但作用对象是持有物自身 */
+function itemFinePrintRulesFor(ctx: EvalCtx): EffectRule[] {
+  const fps = ctx.finePrint ?? [];
+  if (fps.length === 0) return [];
+  const out: EffectRule[] = [];
+  for (const rule of ITEM_FINE_PRINT_RULES) {
+    const gates = gatesOf(rule);
+    const wantsIcon = gates.some((g) => g.kind === 'fp_icon');
+    const rejectsIcon = gates.some((g) => g.kind === 'no_fp_icon');
+    for (const fp of fps) {
+      if (!gates.every((g) => fpGateHolds(g, fp))) continue;
+      if (wantsIcon && !fp.dynamicIcon) continue;
+      if (rejectsIcon && fp.dynamicIcon) continue;
+      out.push(instantiateFinePrint(rule, fp));
+    }
+  }
+  return out;
+}
+
+/**
+ * 道具自身的价值（Item__Item.gd:1836-1863 的 `<outside>` 块）。
+ * 道具不占格、不参与计分，这条只影响「按 value 折算」的道具行为（MOD 兑换）与面板展示，
+ * 但必须算出来，不能像以前那样整块丢掉。
+ */
+export function heldItemValue(def: SymbolDef, count: number, ctx: EvalCtx = {}): number {
+  const self = { def, itemCount: count } as unknown as Cell;
+  let value = 0;
+  for (const rule of itemFinePrintRulesFor(ctx)) {
+    if (!rule.comparisons.every((c) => matchOne(c, self, self, ctx))) continue;
+    const n = Number(evalValue(rule.diff, self, ctx) ?? 0);
+    if (!Number.isFinite(n)) continue;
+    if (MULTIPLY_VTC.has(rule.vtc)) value *= n;
+    else value += n;
+  }
+  return value;
+}
+
+/**
+ * 反向加成：拥有者命中分组归属（含 prev_data 历史身份）或 MOD 的 reverse_type 时，
+ * 把声明发给相邻格。原版 `<outside>` 块（doglikes / beelikes / omelettestuff）
+ * 与 MOD 的 `reverse_adjacent_symbol` 都走这条路径。
+ */
+function reverseRulesFor(cell: Cell): EffectRule[] {
+  if (REVERSE_RULES.length === 0) return [];
+  const groups = cellGroups(cell);
+  const id = cell.def?.id ?? '';
+  const out: EffectRule[] = [];
+  for (const rr of REVERSE_RULES) {
+    // 没有拥有者条件的声明保持原版「对所有格生效」
+    if (rr.ownerGroups.length === 0 && rr.ownerTypes.length === 0) {
+      out.push(rr.rule);
+      continue;
+    }
+    if (rr.ownerTypes.includes(id) || rr.ownerGroups.some((g) => groups.includes(g))) out.push(rr.rule);
+  }
+  return out;
+}
+
+/**
+ * 本转的邻域：细则 22 生效时去掉正上/正下，只留左右与四个斜向
+ * （Slot_Icon__Slot_Icon.gd:1184-1191）。
+ */
+function neighborsFor(ctx: EvalCtx, index: number): number[] {
+  const skipVertical = (ctx.finePrint ?? []).some((fp) => fp.num === 22);
+  return neighborsOf(index, { skipVertical });
+}
+
 function withAutoComparisons(rule: EffectRule, self: Cell): EffectComparison[] {
   const comps = [...rule.comparisons];
   const hasTypeGroups = comps.some((c) => {
@@ -662,6 +1029,8 @@ function withAutoComparisons(rule: EffectRule, self: Cell): EffectComparison[] {
   const skipAuto =
     comps.length === 0 ||
     hasTypeGroups ||
+    // *global* / *fineprint* 是通用规则，不绑定某个符号，不能自动补「同类型」
+    rule.symbol.startsWith('*') ||
     rule.flags.includes('from_item') ||
     rule.flags.includes('unconditional') ||
     rule.flags.some((f) => f.startsWith('giver:hex_of_') || f.startsWith('giver:midas_bomb'));
@@ -682,20 +1051,46 @@ function withAutoComparisons(rule: EffectRule, self: Cell): EffectComparison[] {
  * 后者（解析出的 `target:adjacent`）把效果挂到**相邻符号**身上，
  * 条件也在那个相邻符号的邻域里判定，而不是挂回发起者自己。
  */
-export function applyEffects(cells: Cell[], ctx: EvalCtx = {}): EffectRun {
+export function applyEffects(
+  cells: Cell[],
+  ctx: EvalCtx = {},
+  /**
+   * 只结算这些下标（缺省=全场）。
+   * 玩家主动移除时（removal_token / 道具吃符号）源码只跑被移除符号自己的声明，
+   * 不重跑整盘，所以这里给一个作用域闸门，坐标仍然按完整 cells 计算。
+   */
+  only?: ReadonlySet<number>,
+): EffectRun {
   let applied = 0;
   let skipped = 0;
 
   for (let i = 0; i < cells.length; i += 1) {
+    if (only && !only.has(i)) continue;
     const cell = cells[i];
     // destroyed 的符号本转仍要跑自己的声明：源码里「被摧毁后 value_bonus」
     // 正是靠 destroyed=true 之后再判定一次才拿到奖励（Slot_Icon__Slot_Icon.gd:3165）。
     if (!cell.def) continue;
     const pos = positionOf(i);
-    const local: EvalCtx = { ...ctx, position: pos };
-    const rules = EFFECTS_BY_SYMBOL.get(cell.def.id) ?? [];
+    const local: EvalCtx = { ...ctx, position: pos, owner: cell };
+    // 自身声明 + 反向加成（拥有者条件命中时发给相邻格）+ 当前细则带来的修正（*fineprint*）
+    const rules = [
+      ...(EFFECTS_BY_SYMBOL.get(cell.def.id) ?? []),
+      ...reverseRulesFor(cell),
+      ...finePrintRulesFor(local),
+    ];
     for (const rule of rules) {
-      if (ruleStatus(rule) !== 'executable') {
+      const status = ruleStatus(rule);
+      // 源码里有些声明只干一件事：条件成立就把 item_to_destroy 的精华用掉
+      // （忍者与老鼠、晴空、鸡舍……）。它们没有 vtc / diff，但必须照样执行。
+      const consumeOnly =
+        status === 'noop' &&
+        consumeOf(rule).length > 0 &&
+        !rule.flags.some((f) => f.startsWith('gated:'));
+      if (status !== 'executable' && !consumeOnly) {
+        skipped += 1;
+        continue;
+      }
+      if (!ruleGatesOk(rule, local, cell)) {
         skipped += 1;
         continue;
       }
@@ -740,11 +1135,56 @@ export function applyEffects(cells: Cell[], ctx: EvalCtx = {}): EffectRun {
         if (typeof idx !== 'number') return;
         (target.appliedRules ??= new Set()).add(idx);
       };
+      // item_to_destroy：只要这条声明落地一次，就把指定道具消耗掉（每转一次）
+      let consumed = false;
       const markApplied = (target: Cell): void => {
         remember(target);
         applied += 1;
+        // 彩蛋统计跟着「声明落地」走：同一条声明在一轮里只记一次，
+        // 所以摸狗、喝酒这些计数不会因为多轮迭代被重复累加。
+        for (const s of rule.stats ?? []) {
+          const raw = s.diff === undefined ? 1 : evalValue(s.diff, target, ctx);
+          const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+          if (n !== 0) ctx.stat?.(s.key, n);
+        }
+        if (consumed) return;
+        const eat = consumeOf(rule);
+        if (eat.length === 0) return;
+        consumed = true;
+        for (const id of eat) ctx.consume?.(id);
+      };
+      /**
+       * tiles_to_add：条件满足就把生成物排进本转队列。
+       * 数量来自自身 values[N]（urn / tomb / pinata 的 N），字面量声明返回 1。
+       * 返回 true 表示这条声明只干生成这件事，不产生数值。
+       */
+      const fireSpawn = (owner: Cell): boolean => {
+        const specs = rule.spawn ?? [];
+        if (specs.length === 0) return false;
+        for (const spec of specs) {
+          const raw = spec.count === undefined ? 1 : evalValue(spec.count, owner, ctx);
+          const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.trunc(raw) : 0;
+          if (n <= 0) continue;
+          ctx.spawn?.({ type: spec.type, group: spec.group, minRarity: spec.minRarity, count: n }, owner);
+        }
+        return true;
       };
       if (typeof idx === 'number' && cell.appliedRules?.has(idx)) continue;
+
+      // 纯消耗声明：条件（相对相邻符号，或相对自己）一旦满足就扣一件道具
+      if (consumeOnly) {
+        const onNeighbor = rule.flags.includes('target:adjacent');
+        const spots = onNeighbor ? neighborsFor(ctx, i) : [i];
+        for (const j of spots) {
+          const target = cells[j];
+          if (!target.def) continue;
+          const targetCtx: EvalCtx = { ...ctx, position: positionOf(j) };
+          if (!comps.every((c) => matchOne(c, target, onNeighbor ? cell : target, targetCtx))) continue;
+          markApplied(target);
+          break;
+        }
+        continue;
+      }
 
       // add_to_cond_effects：声明挂到「满足 conditions 的目标符号」身上，
       // 走全局 cond_effects_to_add 队列（Item__Item.gd:1274-1298），不是相邻挂载。
@@ -755,15 +1195,16 @@ export function applyEffects(cells: Cell[], ctx: EvalCtx = {}): EffectRun {
           if (target === cell || !target.def || target.destroyed) continue;
           if (!comps.every((c) => matchOne(c, target, cell, { ...local, position: positionOf(t) }))) continue;
           const d = diffFor(target);
-          if (d === null) continue;
-          applyTo(target, rule, d, local);
+          // 变形声明（洒水壶把种子变成植物）没有 diff，目标由 group/min_rarity 选
+          if (d === null && rule.vtc !== 'type') continue;
+          applyTo(target, rule, (d ?? 0) as number | string | boolean, local);
           markApplied(target);
         }
         continue;
       }
 
       if (rule.flags.includes('target:adjacent')) {
-        for (const j of neighborsOf(i)) {
+        for (const j of neighborsFor(ctx, i)) {
           const target = cells[j];
           if (!target.def || target.destroyed) continue;
           // 条件挂在被作用的那个相邻符号身上（Slot_Icon__Slot_Icon.gd:3364-3369），
@@ -772,19 +1213,40 @@ export function applyEffects(cells: Cell[], ctx: EvalCtx = {}): EffectRun {
           if (!comps.every((c) => matchOne(c, target, cell, targetCtx))) continue;
           if (once && hits.has(target)) continue;
           const d = diffFor(target);
-          if (d === null) continue;
-          applyTo(target, rule, d, targetCtx);
+          if (d === null && rule.vtc !== 'type') continue;
+          applyTo(target, rule, (d ?? 0) as number | string | boolean, targetCtx);
           hits.add(target);
           markApplied(target);
         }
         continue;
       }
 
+      // target:self：字典仍挂在相邻符号上（条件在那个邻居身上判定，被摧毁的也算），
+      // 只有数值落回发起者自己。bounty_hunter「吃掉相邻小偷后自己 +契约价值」、
+      // dwarf「矿工被毁后自己 +价值」都是这个形状。
+      if (rule.flags.includes('target:self')) {
+        for (const j of neighborsFor(ctx, i)) {
+          const near = cells[j];
+          if (!near.def) continue;
+          const nearCtx: EvalCtx = { ...ctx, position: positionOf(j) };
+          if (!comps.every((c) => matchOne(c, near, cell, nearCtx))) continue;
+          if (once && hits.has(near)) continue;
+          const d = diffFor(near);
+          if (d === null && rule.vtc !== 'type') continue;
+          applyTo(cell, rule, (d ?? 0) as number | string | boolean, local);
+          hits.add(near);
+          markApplied(cell);
+        }
+        continue;
+      }
+
       if (comps.length === 0) {
         const d = diffFor(cell);
+        const spawned = fireSpawn(cell);
         // diff 缺失但带 group 的声明（seed → plant 随机变形）走 applyTo 内部选靶
         if (d === null && rule.vtc !== 'type') {
-          skipped += 1;
+          if (spawned) markApplied(cell);
+          else skipped += 1;
           continue;
         }
         applyTo(cell, rule, (d ?? 0) as number | string | boolean, local);
@@ -799,8 +1261,14 @@ export function applyEffects(cells: Cell[], ctx: EvalCtx = {}): EffectRun {
       if (once && hits.has(cell)) continue;
       {
         const d = diffFor(cell);
-        if (d === null) continue;
-        applyTo(cell, rule, d, local);
+        // 蜂巢按 values[0]=10 的概率生蜜、陶罐被毁后生灵魂，都在这一支
+        const spawned = fireSpawn(cell);
+        // 变形声明（seed → plant）没有 diff，目标由 applyTo 里的 group/min_rarity 选
+        if (d === null && rule.vtc !== 'type') {
+          if (spawned) markApplied(cell);
+          continue;
+        }
+        applyTo(cell, rule, (d ?? 0) as number | string | boolean, local);
         hits.add(cell);
         markApplied(cell);
       }
@@ -904,9 +1372,16 @@ export function symbolCoverage(): SymbolCoverage[] {
 export interface ItemHolder {
   def: SymbolDef;
   count: number;
+  /** 道具自身的 value 槽位（Item__Item.gd 的 `value`），细则 17 会按持有数量扣减 */
+  value?: number;
 }
 
 const MULTIPLY_VTC = new Set(['value_multiplier', 'permanent_multiplier']);
+
+/** 道具栏里某个道具的总数量，供 when:item:X 门控使用 */
+function countOf(items: ItemHolder[], id: string): number {
+  return items.reduce((n, it) => n + (it.def?.id === id ? it.count : 0), 0);
+}
 
 /**
  * 道具的全局效果。
@@ -919,16 +1394,24 @@ const MULTIPLY_VTC = new Set(['value_multiplier', 'permanent_multiplier']);
 export function applyItemEffects(
   items: ItemHolder[],
   cells: Cell[],
-): { applied: number; skipped: number } {
+  ctx: EvalCtx = {},
+): { applied: number; skipped: number; consumed: string[] } {
   let applied = 0;
   let skipped = 0;
-  if (items.length === 0) return { applied, skipped };
+  /** item_to_destroy：声明落地后要移除的道具，由引擎统一扣掉 */
+  const consumed: string[] = [];
+  if (items.length === 0) return { applied, skipped, consumed };
 
   for (const held of items) {
     if (!held.def || held.count <= 0) continue;
     const holder = { def: held.def } as Cell;
     for (const rule of EFFECTS_BY_SYMBOL.get(held.def.id) ?? []) {
       if (rule.kind !== 'cond') continue;
+      // 源码用 if/elif 按「持有别的道具 / 细则」分档，条件不成立的分支不结算
+      if (!ruleGatesOk(rule, { ...ctx, itemCount: (id) => countOf(items, id) })) {
+        skipped += 1;
+        continue;
+      }
       if (!SUPPORTED_VTC.has(rule.vtc)) {
         skipped += 1;
         continue;
@@ -938,29 +1421,47 @@ export function applyItemEffects(
         continue;
       }
       const base = evalValue(rule.diff, holder);
-      if (base === null) {
+      // 变形声明（洒水壶）没有 diff，目标由 group/min_rarity 选
+      if (base === null && rule.vtc !== 'type') {
         skipped += 1;
         continue;
       }
-      const n = Number(base);
+      const n = Number(base ?? 0);
       const diff = MULTIPLY_VTC.has(rule.vtc)
         ? Math.pow(n, held.count)
         : rule.flags.includes('multiply')
           ? n
           : n * held.count;
 
+      // bonus_value_num 里的 `$self_index` 指道具自己的 values，先把槽位算实
+      let useRule = rule;
+      if (rule.flags.some((f) => f.startsWith('slot:'))) {
+        const slot = slotOf(rule, holder, ctx);
+        if (slot !== null) {
+          useRule = { ...rule, flags: rule.flags.map((f) => (f.startsWith('slot:') ? `slot:${slot}` : f)) };
+        }
+      }
+
       let hit = 0;
       for (const target of cells) {
         if (!target.def || target.destroyed) continue;
-        if (!rule.comparisons.every((c) => matchOne(c, target, holder))) continue;
-        applyTo(target, rule, diff);
+        if (!rule.comparisons.every((c) => matchOne(c, target, holder, ctx))) continue;
+        applyTo(target, useRule, diff, ctx);
         hit += 1;
       }
-      if (hit > 0) applied += hit;
-      else skipped += 1;
+      if (hit > 0) {
+        applied += hit;
+        for (const id of consumeOf(rule)) {
+          if (!consumed.includes(id)) consumed.push(id);
+        }
+      } else skipped += 1;
     }
+    // 细则对道具自身 value 的修正（Item__Item.gd 的 <outside> 块）
+    const selfValue = heldItemValue(held.def, held.count, { ...ctx, itemCount: (id) => countOf(items, id) });
+    if (selfValue !== 0) held.value = selfValue;
+    else delete held.value;
   }
-  return { applied, skipped };
+  return { applied, skipped, consumed };
 }
 
 /* ── 面向玩家的人话描述 ──
@@ -1006,6 +1507,13 @@ function dynText(expr: string, owner?: Owner): string {
   }
   const e = normalizeExpr(expr).trim();
   let m: RegExpMatchArray | null;
+  // 细则实例化后 `fp.values[i]` 已换成字面量，直接出数字，别再当成未知表达式
+  if (/^-?\d+(?:\.\d+)?$/.test(e)) return numText(Number(e));
+  // 道具侧：每持有一个就扣一次
+  if ((m = e.match(/^(-?\d+(?:\.\d+)?) \* item_count$/))) {
+    const n = Number(m[1]);
+    return `每持有一个就 ${n >= 0 ? '+' : ''}${numText(n)}`;
+  }
   if ((m = e.match(/^times_displayed \* values\[(\d+)\]$/))) {
     const n = at(m[1]);
     return n === null ? '每出现一次就加一次' : `每出现一次 +${numText(n)}`;
@@ -1067,23 +1575,23 @@ function dynText(expr: string, owner?: Owner): string {
   if (/counted_symbols\["([a-z0-9_]+)"\]/.test(e)) return '按场上的符号数量放大';
   if ((m = e.match(/^int\(values\[(\d+)\]\)$/))) {
     const n = at(m[1]);
-    return n === null ? '面板数值' : String(Math.floor(n));
+    return n === null ? '自身面板上的数值' : String(Math.floor(n));
   }
   if ((m = e.match(/^values\[(\d+)\] - 1$/))) {
     const n = at(m[1]);
-    return n === null ? '面板数值减一' : numText(n - 1);
+    return n === null ? '自身面板上的数值减一' : numText(n - 1);
   }
   if ((m = e.match(/^values\[(\d+)\] \+ 1$/))) {
     const n = at(m[1]);
-    return n === null ? '面板数值加一' : numText(n + 1);
+    return n === null ? '自身面板上的数值加一' : numText(n + 1);
   }
   if ((m = e.match(/^-values\[(\d+)\]$/))) {
     const n = at(m[1]);
-    return n === null ? '面板数值的负数' : numText(-n);
+    return n === null ? '自身面板数值的相反数' : numText(-n);
   }
   if ((m = e.match(/^values\[(\d+)\]$/))) {
     const n = at(m[1]);
-    return n === null ? '面板数值' : numText(n);
+    return n === null ? '自身面板上的数值' : numText(n);
   }
   // 引用另一个符号的面板数值：d3.values[1]
   if ((m = e.match(/^([a-z0-9_]+)\.values\[(\d+)\]$/))) {
@@ -1098,6 +1606,8 @@ function fmtValue(v: EffectValue, owner?: Owner): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'boolean') return v ? '' : '';
   if (typeof v === 'number') return numText(v);
+  // "rand_num" 是 rand_range(0,100) 占位，不能当符号名渲染成 "Rand Num"
+  if (v === 'rand_num') return '随机数';
   if (typeof v === 'string') return symbolName(v);
   const o = v as Record<string, unknown>;
   if ('$dyn' in o) return dynText(String(o.$dyn), owner);
@@ -1105,7 +1615,7 @@ function fmtValue(v: EffectValue, owner?: Owner): string {
   if ('$ref_value' in o) return `${symbolName(String(o.$ref_value))} 的数值`;
   if ('$self_index' in o) {
     const n = ownerNum(owner, Number(o.$self_index));
-    return n === null ? '面板数值' : numText(n);
+    return n === null ? '自身面板上的数值' : numText(n);
   }
   if ('$self_value' in o) return '本符号的数值';
   if ('$adj_count' in o) return '相邻格数';
@@ -1119,8 +1629,10 @@ interface Cond {
   /** 分组名，如 dwarflikes → 亲矮人 */
   groupLabel?: string;
   destroyed?: boolean;
-  /** 条件里含随机判定（看运气） */
+  /** 条件里含随机判定：说得出概率的走 chance，说不出的只标「有概率」 */
   luck: boolean;
+  /** 按数值决定概率的随机条件：数字是百分比，null 表示数值未知 */
+  chance?: number | null;
   extras: string[];
   /** 条件里除了「相邻有 X」没有别的内容 */
   onlyType: boolean;
@@ -1150,7 +1662,8 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       continue;
     }
     if (key === 'rarity' && typeof cmp.b === 'string') {
-      out.extras.push(`相邻是${RARITY_LABEL[cmp.b as Rarity] ?? cmp.b}符号`);
+      // 细则块等自作用声明里，稀有度条件说的是本符号自己
+      out.extras.push(`${adjacent ? '相邻是' : '本符号是'}${RARITY_LABEL[cmp.b as Rarity] ?? cmp.b}符号`);
       continue;
     }
     if (key === 'adjacent_empty') {
@@ -1173,21 +1686,41 @@ function readCond(rule: EffectRule, owner?: Owner, adjacent = false): Cond {
       out.extras.push(cmp.b ? '打不碎' : '能被打碎');
       continue;
     }
-    // 随机阈值（rand_range）属于运气判定，不把数值门槛摊给玩家看
-    if (cmp.b && typeof cmp.b === 'object' && '$dyn' in (cmp.b as Record<string, unknown>)) {
-      out.luck = true;
+    // 随机阈值（rand:true）：源码判定是「值 ≥ rand_range(0,100)」，
+    // 成立概率就是数值本身（种子 25 → 25%），直接说几成
+    if ((cmp as unknown as Record<string, unknown>).rand) {
+      const n = ownerNum(owner, Number(cmp.value_num ?? 0));
+      out.chance = n === null ? null : Math.max(0, Math.min(100, n));
       continue;
+    }
+    // 随机表达式属于运气判定，不把数值门槛摊给玩家看；
+    // 非随机的动态表达式（数值、出现次数之类）继续往下走，避免被说成「有概率」
+    if (cmp.b && typeof cmp.b === 'object' && '$dyn' in (cmp.b as Record<string, unknown>)) {
+      const expr = String((cmp.b as Record<string, unknown>).$dyn);
+      if (/rand/i.test(expr)) {
+        out.luck = true;
+        continue;
+      }
     }
     if (key === 'values' || key === 'value' || key === 'value_bonus') {
       out.extras.push(`数值${opText(cmp)}${fmtValue(cmp.b, owner)}`);
       continue;
     }
     if (key === 'times_displayed') {
-      out.extras.push(`已出现${opText(cmp)}${fmtValue(cmp.b, owner)}次`);
+      // 阈值是动态表达式（还要扣时间机器差值）时，别把公式摊给玩家
+      out.extras.push(
+        cmp.b && typeof cmp.b === 'object'
+          ? '出现次数攒够'
+          : `已出现${opText(cmp)}${fmtValue(cmp.b, owner)}次`,
+      );
       continue;
     }
     if (key === 'times_coins_given') {
-      out.extras.push(`已给币${opText(cmp)}${fmtValue(cmp.b, owner)}次`);
+      out.extras.push(
+        cmp.b && typeof cmp.b === 'object'
+          ? '给币次数攒够'
+          : `已给币${opText(cmp)}${fmtValue(cmp.b, owner)}次`,
+      );
       continue;
     }
     if (key === 'saved_value') {
@@ -1220,10 +1753,22 @@ function amountText(d: string): string {
   return `+${d}`;
 }
 
+/** d 是不是能直接运算的纯数字（允许带正负号） */
+function isNumeric(d: string): boolean {
+  return /^[-+]?\d/.test(d);
+}
+
 /** 给数值补一个单位；整句时不留空格（「数值每出现一次 +2」） */
 function unitText(unit: string, d: string): string {
   const a = amountText(d);
-  return /^[0-9+\-]/.test(a) ? `${unit} ${a}` : `${unit}${a}`;
+  if (/^[0-9+\-]/.test(a)) return `${unit} ${a}`;
+  // 文案型来源（面板数值、对方的数值、随机值…）不能直接贴上去，接成「数值 + 面板数值」
+  return `${unit} + ${d}`;
+}
+
+/** 倍率写法：数字直接乘，文案型来源套括号，避免「×面板数值」这种半截话 */
+function timesText(unit: string, d: string): string {
+  return isNumeric(d) ? `${unit} ×${d}` : `${unit} ×（${d}）`;
 }
 
 /** 效果本身，返回「值型」或「动作型」两种句块 */
@@ -1231,7 +1776,20 @@ function effectText(rule: EffectRule, owner?: Owner): string {
   const vtc = rule.vtc;
   if (RARITY_KEYS.has(vtc)) return '';
   if (vtc === 'type') {
-    return typeof rule.diff === 'string' ? `变成${symbolName(rule.diff)}` : '变回原样';
+    if (typeof rule.diff === 'string') return `变成${symbolName(rule.diff)}`;
+    // diff 为空时靠 flags 从某个组里按稀有度随机挑（种子长成植物的写法）
+    const group = rule.flags.find((f) => f.startsWith('group:'))?.slice('group:'.length);
+    const minRaw = rule.flags.find((f) => f.startsWith('min_rarity:'))?.slice('min_rarity:'.length);
+    if (group) {
+      const base = `变成随机的${groupName(group)}`;
+      if (!minRaw) return base;
+      const label = RARITY_LABEL[minRaw as Rarity] ?? minRaw;
+      // 顶档没有「至少」可言，直接写稀有度
+      return RARITY_ORDER.indexOf(minRaw as Rarity) === RARITY_ORDER.length - 1
+        ? `${base}（${label}）`
+        : `${base}（至少${label}）`;
+    }
+    return '变回原样';
   }
   if (vtc === 'destroyed') return rule.diff === false ? '不再被摧毁' : '摧毁';
   if (vtc === 'removed') return '移除';
@@ -1270,13 +1828,13 @@ function effectText(rule: EffectRule, owner?: Owner): string {
     case 'permanent_bonus':
       return d ? unitText('永久', d) : '永久上升';
     case 'value_multiplier':
-      return d ? `本轮倍率 ×${d}` : '本轮倍率上升';
+      return d ? timesText('本轮倍率', d) : '本轮倍率上升';
     case 'permanent_multiplier':
-      return d ? `永久倍率 ×${d}` : '永久倍率上升';
+      return d ? timesText('永久倍率', d) : '永久倍率上升';
     case 'bonus_values':
       return d ? unitText('额外数值', d) : '额外数值上升';
     case 'bonus_value_multipliers':
-      return d ? `额外倍率 ×${d}` : '额外倍率上升';
+      return d ? timesText('额外倍率', d) : '额外倍率上升';
     case 'saved_value':
       if (!d) return '开始积累';
       // 攒满之后清零重来（信用卡）
@@ -1297,8 +1855,115 @@ function effectText(rule: EffectRule, owner?: Owner): string {
   }
 }
 
+/** 生效条件写成前提；细则开关属于整局规则，玩家看不到，不进句子 */
+function gateText(rule: EffectRule): string {
+  const holds: string[] = [];
+  const lacks: string[] = [];
+  const anyHolds: string[] = [];
+  for (const gate of gatesOf(rule)) {
+    if (gate.kind === 'item') holds.push(...gate.keys.map((k) => symbolName(k)));
+    else if (gate.kind === 'no_item') lacks.push(...gate.keys.map((k) => symbolName(k)));
+    else if (gate.kind === 'any_item') anyHolds.push(gate.keys.map((k) => symbolName(k)).join('或'));
+  }
+  const parts: string[] = [];
+  if (holds.length > 0) parts.push(`持有${holds.join('、')}`);
+  if (anyHolds.length > 0) parts.push(`持有${anyHolds.join('、')}`);
+  if (lacks.length > 0) parts.push(`没持有${lacks.join('、')}`);
+  return parts.join('且');
+}
+
+/** item_to_destroy：句末补一句「消耗什么」 */
+function consumeText(rule: EffectRule): string {
+  const ids = consumeOf(rule);
+  return ids.length > 0 ? `（消耗${ids.map((id) => symbolName(id)).join('、')}）` : '';
+}
+
 /** 把一条声明渲染成玩家能读懂的一句话；返回空串表示这条不值得展示 */
 export function describeRule(rule: EffectRule, owner?: Owner): string {
+  const body = describeRuleBody(rule, owner);
+  // tiles_to_add 的语义是「往棋盘里塞一个新符号」，和数值改动可以同时存在
+  // （蜂巢值 +1 的同时产蜜），所以两条文案拼在一起，而不是互相覆盖。
+  const spawn = spawnTextOf(rule);
+  const core = body && spawn ? `${body}，并${spawn}` : body || spawn;
+  if (!core) return '';
+  const gate = gateText(rule);
+  const eat = consumeText(rule);
+  return gate ? `${gate}时，${core}${eat}` : `${core}${eat}`;
+}
+
+/** 生成声明的文案：`生成 1 个🐝蜂蜜(Honey)` / `生成 2 个宝石类符号` */
+function spawnTextOf(rule: EffectRule): string {
+  if (!rule.spawn || rule.spawn.length === 0) return '';
+  const parts = rule.spawn.map((spec) => {
+    const what =
+      spec.type === 'prev_destroyed_symbol'
+        ? '本转被摧毁的符号'
+        : spec.type
+          ? symbolName(spec.type)
+          : spec.group
+            ? `${groupName(spec.group)}符号`
+            : '符号';
+    // count 可能写成表达式（源码里允许 values[N]），说不清时就不编数字
+    const count = typeof spec.count === 'number' ? spec.count : null;
+    return count === null ? `若干${what}` : `${count} 个${what}`;
+  });
+  const body = parts.join('、');
+  // 「生成 1 个…」留空格，「生成若干…」不留
+  return /^\d/.test(body) ? `生成 ${body}` : `生成${body}`;
+}
+
+/** `*fineprint*` 伪符号的规则靠 fp 门控区分于普通符号规则 */
+function isFinePrintRule(rule: EffectRule): boolean {
+  return gatesOf(rule).some((g) => g.kind === 'fp' || g.kind === 'no_fp' || g.kind === 'any_fp');
+}
+
+/** 一条细则当前带来哪些修正（UI 展示用） */
+export function describeFinePrint(fp: FinePrintState): string[] {
+  const out: string[] = [];
+  // 以下几条不走 add_effect 模板，源码直接写在 Slot_Icon.change_type / get_adjacent_icons /
+  // Pop-up.add_cards 里，只能手写
+  const icon = fp.dynamicIcon ? symbolName(fp.dynamicIcon) : '';
+  if (fp.num === 10 && icon) out.push(`「${icon}」不会被摧毁（仍可被移除）`);
+  if (fp.num === 20 && !fp.dynamicIcon) out.push('「金币」不会被摧毁，也不能被移除');
+  if (fp.num === 21 && !fp.dynamicIcon) out.push('「蛋」不会被摧毁，也不能被移除');
+  if (fp.num === 22) out.push('相邻只算左右与斜角，正上/正下不算');
+  if (fp.num === 23) out.push(`稀有符号出现权重 ÷${fp.values[0] ?? 1}`);
+  if (fp.num === 30) out.push(`商店候选数 ${Math.max(0, 3 - (fp.values[0] ?? 0))} 张`);
+  if (fp.num === 36 && icon) out.push(`「${icon}」不会被摧毁，也不能被移除`);
+  for (const rule of FINE_PRINT_RULES) {
+    if (!isFinePrintRule(rule)) continue;
+    // indestructible 的文案已由上面的手写分支给出，避免重复
+    if (rule.vtc === 'indestructible') continue;
+    if (!gatesOf(rule).every((g) => fpGateHolds(g, fp))) continue;
+    const inst = instantiateFinePrint(rule, fp);
+    if (inst.flags.includes('when:fp_icon:any') && !fp.dynamicIcon) continue;
+    if (inst.flags.includes('when:no_fp_icon:any') && fp.dynamicIcon) continue;
+    // 细则块是 add_effect（作用在符号自己身上），`type` 条件说的是「本符号就是它」，
+    // 不能按邻居条件渲染成「相邻的 X 在场」。
+    const subject = inst.comparisons.find((c) => c.a === 'type');
+    const own = typeof subject?.b === 'string' ? symbolName(subject.b) : '';
+    const rest = { ...inst, comparisons: inst.comparisons.filter((c) => c !== subject) };
+    let text = describeRule({ ...rest, flags: rest.flags.filter((f) => !f.startsWith('when:fp')) });
+    if (text && own) text = text.replace(/^本符号/, own).replace(/本符号/g, '它');
+    if (text) out.push(text);
+  }
+  // 道具侧修正（Item__Item.gd 的 <outside> 块）：作用对象是持有物自身，单独表述
+  for (const rule of ITEM_FINE_PRINT_RULES) {
+    if (!isFinePrintRule(rule)) continue;
+    if (!gatesOf(rule).every((g) => fpGateHolds(g, fp))) continue;
+    const inst = instantiateFinePrint(rule, fp);
+    if (inst.flags.includes('when:fp_icon:any') && !fp.dynamicIcon) continue;
+    if (inst.flags.includes('when:no_fp_icon:any') && fp.dynamicIcon) continue;
+    const icon = fp.dynamicIcon ? symbolName(fp.dynamicIcon) : '该道具';
+    const dyn = (inst.diff as { $dyn?: string } | null)?.$dyn;
+    const m = typeof dyn === 'string' ? /^(-?\d+(?:\.\d+)?) \* item_count$/.exec(dyn.trim()) : null;
+    const per = m ? `每持有一个 ${Number(m[1]) >= 0 ? '+' : ''}${numText(Number(m[1]))}` : '随局面变化';
+    out.push(`持有「${icon}」时，它自身的价值${per.replace('每持有一个 ', '每件 ')}`);
+  }
+  return out;
+}
+
+function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   if (SILENT_VTC.has(rule.vtc)) return '';
   const eff = effectText(rule, owner);
   if (!eff) return '';
@@ -1313,8 +1978,22 @@ export function describeRule(rule: EffectRule, owner?: Owner): string {
       ? `相邻的${c.groupLabel}符号`
       : '相邻格';
 
-  // 条件只有「看运气」：整句写成一个概率事件
-  const luckOnly = c.luck && !c.typeName && !c.groupLabel && c.destroyed === undefined && c.extras.length === 0;
+  // kind:"cond" 的声明挂在「满足条件的那个符号」身上（Item__Item.gd:1274-1298），
+  // 效果落在它自己，不是发起者身上，所以措辞从「自己」换成那个符号。
+  const onTarget =
+    !adjacent && rule.kind === 'cond' && (c.typeName !== undefined || c.groupLabel !== undefined);
+  const targetNoun = c.typeName ?? (c.groupLabel ? `${c.groupLabel}符号` : '目标');
+
+  // 按数值决定的概率：源码判定是「值 ≥ 随机数」，概率就是数值本身；
+  // 随机表达式条件（triggerchance 之类）说不清具体概率，只写「有概率」
+  const odds =
+    c.chance !== undefined
+      ? c.chance === null
+        ? '有概率'
+        : `有 ${Math.round(c.chance)}% 概率`
+      : c.luck
+        ? '有概率'
+        : '';
 
   if (adjacent) {
     if (rule.vtc === 'destroyed') return `摧毁${neighbor}`;
@@ -1328,19 +2007,45 @@ export function describeRule(rule: EffectRule, owner?: Owner): string {
     return `每有一格${neighbor}${rest ? `（${rest}）` : ''}，${eff}`;
   }
 
-  if (luckOnly) return isVerb ? `有概率${eff}` : `看运气：${eff}`;
-
   let cond = '';
-  if (c.typeName) cond = `相邻的${c.typeName}${c.destroyed === undefined ? '在场' : c.destroyed ? '被摧毁' : '完好'}`;
+  /** 前提只是「场上有 X」这一句，没有状态、次数之类的附加限定 */
+  let plainCond = false;
+  if (onTarget) {
+    const state = c.destroyed === undefined ? '' : c.destroyed ? '被摧毁的' : '完好的';
+    cond = `场上有${state}${targetNoun}`;
+    plainCond = c.destroyed === undefined;
+  } else if (c.typeName) cond = `相邻的${c.typeName}${c.destroyed === undefined ? '在场' : c.destroyed ? '被摧毁' : '完好'}`;
   else if (c.destroyed !== undefined) cond = c.destroyed ? '本符号被摧毁' : '本符号完好';
-  const extras = c.luck ? [...c.extras, '看运气'] : c.extras;
-  if (extras.length > 0) cond = cond ? `${cond}、${extras.join('、')}` : extras.join('、');
+  const extras = c.extras;
+  if (extras.length > 0) {
+    cond = cond ? `${cond}、${extras.join('、')}` : extras.join('、');
+    plainCond = false;
+  }
 
   if (isVerb) {
-    const verb = rule.vtc === 'destroyed' ? '摧毁自己' : rule.vtc === 'removed' ? '移除自己' : `自己${eff}`;
-    return cond ? `${cond}时，${verb}` : verb;
+    const selfVerb =
+      rule.vtc === 'destroyed' ? '摧毁自己' : rule.vtc === 'removed' ? '移除自己' : `自己${eff}`;
+    // 概率句里主语已经是「这个符号」，再写「自己」就重复了
+    const verb = odds ? selfVerb.replace(/^自己/, '') : selfVerb;
+    if (onTarget) {
+      // 主语已经是那个符号，「自己」要去掉
+      const onIt = selfVerb.replace(/^自己/, '');
+      const main =
+        rule.vtc === 'destroyed'
+          ? `摧毁${targetNoun}`
+          : rule.vtc === 'removed'
+            ? `移除${targetNoun}`
+            : `${odds}让${targetNoun}${onIt}`;
+      // 正文已经点名作用对象时，「场上有种子时」就是废话
+      return cond && !(plainCond && main.includes(targetNoun)) ? `${cond}时，${main}` : main;
+    }
+    if (!cond) return `${odds}${verb}`;
+    return odds ? `${cond}时，${odds}${verb}` : `${cond}时，${verb}`;
   }
-  // 条件已经在说「本符号」，效果句里不再重复主语
-  const subject = cond.startsWith('本符号') ? eff : `本符号${eff}`;
-  return cond ? `${cond}时，${subject}` : subject;
+  // 值型：条件在前，概率修饰主句的谓语（条件已在说本符号时不再重复主语）
+  const subject = onTarget ? `${targetNoun}的${eff}` : cond.startsWith('本符号') ? eff : `本符号${eff}`;
+  const main = odds ? `${odds}让${subject}` : subject;
+  // 正文已经点名作用对象时，不再重复「场上有 X 时」
+  if (onTarget && plainCond && main.includes(targetNoun)) return main;
+  return cond ? `${cond}时，${main}` : main;
 }

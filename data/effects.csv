@@ -1,295 +1,293 @@
-symbol,branch_line,line,comparisons,vtc,diff,flags
-<outside>,0,3700,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",bonus_value_multipliers,"{""$fp"":0}",
-<outside>,0,3702,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}},{""a"":""destroyed"",""b"":true}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",
-<outside>,0,3704,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",indestructible,true,
-<outside>,0,3706,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",
-<outside>,0,3708,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",
-<outside>,0,3714,"[{""a"":""non_prev_final_value"",""b"":0,""less_than"":true}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",gated:fine_print
-<outside>,0,3716,"[{""a"":""type"",""b"":""coin""}]",indestructible,true,gated:fine_print
-<outside>,0,3718,"[{""a"":""type"",""b"":""egg""}]",indestructible,true,gated:fine_print
-<outside>,0,3720,"[{""a"":""rarity"",""b"":""very_rare""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",gated:fine_print
-<outside>,0,3722,"[{""a"":""type"",""b"":""dwarf""}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",gated:fine_print
-<outside>,0,3724,"[{""a"":""type"",""b"":""monkey""}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",gated:fine_print
-<outside>,0,3726,"[{""a"":""type"",""b"":""d3""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",gated:fine_print
-<outside>,0,3728,"[{""a"":""type"",""b"":""d5""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",gated:fine_print
-<outside>,0,3733,"[{""a"":""type"",""b"":""dog"",""not_prev"":true}]",value_bonus,"{""$ref"":""dog"",""$index"":0}",one_time;target:adjacent
-<outside>,0,3736,"[{""a"":""type"",""b"":""bee"",""not_prev"":true}]",value_bonus,"{""$ref"":""bee"",""$index"":1}",target:adjacent
-<outside>,0,3739,"[{""a"":""type"",""b"":""omelette"",""not_prev"":true}]",value_bonus,"{""$ref"":""omelette"",""$index"":0}",one_time;target:adjacent
-<outside>,0,3742,"[{""a"":""type"",""b"":""egg"",""not_prev"":true}]",destroyed,true,one_time;target:adjacent
-d5|d3,3755,3761,[],value_bonus,"{""$dyn"":""floor(rand_range(values[0], values[1] + 1))""}",
-d5|d3,3755,3763,[],value_bonus,"{""$self_index"":1}",
-joker,3764,3766,"[{""a"":""groups"",""b"":""suit""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-seed,3767,3785,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,group:plant;min_rarity:very_rare
-seed,3767,3788,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,group:plant;min_rarity:rare
-seed,3767,3791,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,group:plant;min_rarity:uncommon
-seed,3767,3794,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,group:plant
-ore,3795,3803,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""ore""}]",,null,
-ore,3795,3805,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""ore""}]",,null,
-ore,3795,3807,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""ore""}]",,null,
-coal,3808,3814,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",type,"""diamond""",
-coal,3808,3815,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",times_displayed,0,overwrite
-diamond,3816,3817,"[{""a"":""type"",""b"":""diamond""},{""a"":{""counted_symbols"":""diamond""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""diamond""}",
-bounty_hunter,3818,3824,"[{""a"":""groups"",""b"":""human""}]",destroyed,true,target:adjacent
-bounty_hunter,3818,3825,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""human""}]",value_bonus,"{""$dyn"":""zaroffs_contract.values[0] * zaroffs_contract.item_count""}",target:self
-bounty_hunter,3818,3826,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$self_index"":0}",target:self
-bounty_hunter,3818,3829,"[{""a"":""type"",""b"":""thief""}]",destroyed,true,target:adjacent
-bounty_hunter,3818,3830,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$self_index"":0}",target:self
-midas_bomb,3831,3839,"[{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",destroyed,true,target:adjacent
-midas_bomb,3831,3840,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":{""$dyn"":""i.type""},""not_prev"":true},{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-midas_bomb,3831,3841,[],destroyed,true,
-thief,3844,3845,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$dyn"":""times_displayed * values[1]""}",
-ninja,3846,3858,"[{""a"":""type"",""b"":""ninja""},{""a"":{""counted_symbols"":""ninja""},""b"":0,""greater_than"":true}]",value_bonus,"{""$dyn"":""(-values[0] + cursed_katana_diff) * reels.counted_symbols[\""ninja\""]""}",
-ninja,3846,3861,"[{""a"":""type"",""b"":""mouse""}]",value_multiplier,"{""$dyn"":""pow(ninja_and_mouse.values[0], ninja_and_mouse.item_count)""}",one_time;target:adjacent
-ninja,3846,3864,"[{""a"":""type"",""b"":""mouse""}]",,null,one_time;target:adjacent
-bear,3865,3867,"[{""a"":""type"",""b"":""honey""}]",destroyed,true,target:adjacent
-bear,3865,3868,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""honey""}]",value_bonus,"{""$self_index"":0}",target:self
-bee,3869,3871,"[{""a"":""groups"",""b"":""beelikes""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-beehive,3872,3874,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-rain,3875,3877,"[{""a"":""type"",""b"":""flower""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-rain,3875,3878,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",target:adjacent
-lockbox,3879,3880,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""lockbox""}]",value_bonus,"{""$self_index"":0}",
-beastmaster,3881,3883,"[{""a"":""groups"",""b"":""animal""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-wildcard,3884,3885,"[{""a"":""type"",""b"":""wildcard""}]",wildcarded,true,
-treasure_chest,3886,3887,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""treasure_chest""}]",value_bonus,"{""$self_index"":0}",
-safe,3888,3889,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""safe""}]",value_bonus,"{""$self_index"":0}",
-pinata,3890,3894,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""pinata""}]",,null,
-lucky_capsule,3895,3901,[],destroyed,true,
-lucky_capsule,3895,3902,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""lucky_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",
-moon,3903,3906,"[{""a"":""groups"",""b"":""night""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-moon,3903,3914,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""moon""}]",,null,
-sun,3915,3920,"[{""a"":""type"",""b"":""flower""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-sun,3915,3921,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",target:adjacent
-sun,3915,3924,"[{""a"":""type"",""b"":""moon""}]",,null,target:adjacent
-chef,3925,3927,"[{""a"":""groups"",""b"":""food""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-mega_chest,3928,3929,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""mega_chest""}]",value_bonus,"{""$self_index"":0}",
-cultist,3930,3931,"[{""a"":""type"",""b"":""cultist""},{""a"":{""counted_symbols"":""cultist""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""cultist""}",
-cultist,3930,3932,"[{""a"":""type"",""b"":""cultist""},{""a"":{""counted_symbols"":""cultist""},""b"":{""$dyn"":""values[2] - 1""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":1}",
-spirit,3933,3935,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,gated:has_unmodded_item
-spirit,3933,3937,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,gated:has_unmodded_item
-bubble,3938,3939,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,
-tomb,3940,3942,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-tomb,3940,3960,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""tomb""}]",,null,
-urn,3961,3979,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""urn""}]",,null,
-big_urn,3980,3998,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""big_urn""}]",,null,
-cat,3999,4013,"[{""a"":""type"",""b"":""cat""}]",uncommon,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",multiply
-cat,3999,4014,"[{""a"":""type"",""b"":""cat""}]",rare,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",multiply
-cat,3999,4015,"[{""a"":""type"",""b"":""cat""}]",very_rare,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",multiply
-cat,3999,4020,"[{""a"":""type"",""b"":""milk""}]",destroyed,true,target:adjacent
-cat,3999,4021,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""milk""}]",value_bonus,"{""$self_index"":0}",target:self
-toddler,4022,4024,"[{""a"":""type"",""b"":""candy""},{""a"":""destroyed"",""b"":true}]",,null,target:adjacent
-toddler,4022,4025,"[{""a"":""groups"",""b"":""toddlerlikes""}]",destroyed,true,target:adjacent
-toddler,4022,4026,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""toddlerlikes""}]",value_bonus,"{""$self_index"":0}",target:self
-general_zaroff,4027,4029,"[{""a"":""groups"",""b"":""human""}]",destroyed,true,target:adjacent
-general_zaroff,4027,4030,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""human""}]",value_bonus,"{""$self_index"":0}",target:self
-miner,4031,4033,"[{""a"":""groups"",""b"":""minerlikes""}]",destroyed,true,target:adjacent
-miner,4031,4034,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""minerlikes""}]",value_bonus,"{""$self_index"":0}",target:self
-rabbit_fluff,4035,4037,"[{""a"":""type"",""b"":""rabbit_fluff""}]",uncommon,"{""$self_index"":0}",multiply
-rabbit_fluff,4035,4038,"[{""a"":""type"",""b"":""rabbit_fluff""}]",rare,"{""$self_index"":0}",multiply
-rabbit_fluff,4035,4039,"[{""a"":""type"",""b"":""rabbit_fluff""}]",very_rare,"{""$self_index"":0}",multiply
-chicken,4040,4041,"[{""a"":""type"",""b"":""egg""},{""a"":""type"",""b"":""chick""}]",achievement_value,1,
-chicken,4040,4043,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-chicken,4040,4045,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":1,""rand"":true}]",,null,
-chicken,4040,4046,"[{""a"":""type"",""b"":""egg""},{""a"":""type"",""b"":""chick""}]",,null,
-chick,4047,4049,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,"""chicken""",
-egg,4050,4052,"[{""a"":""type"",""b"":""golden_egg""}]",achievement_value,1,target:self
-egg,4050,4054,"[{""a"":""type"",""b"":""egg"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":""destroyed"",""b"":false}]",type,"""chick""",
-cheese,4055,4057,"[{""a"":""type"",""b"":""milk""}]",achievement_value,1,target:self
-cheese,4055,4058,"[{""a"":""type"",""b"":""omelette""}]",achievement_value,1,target:self
-cheese,4055,4059,"[{""a"":""type"",""b"":""egg""}]",achievement_value,1,target:self
-mouse,4060,4062,"[{""a"":""type"",""b"":""cheese""}]",destroyed,true,target:adjacent
-mouse,4060,4063,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""cheese""}]",value_bonus,"{""$self_index"":0}",target:self
-mouse,4060,4064,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""cheese""}]",achievement_value,1,target:self
-mouse,4060,4065,"[{""a"":""type"",""b"":""ninja""}]",achievement_value,1,target:self
-mouse,4060,4074,"[{""a"":""type"",""b"":""ninja""}]",value_multiplier,"{""$dyn"":""pow(ninja_and_mouse.values[0], ninja_and_mouse.item_count)""}",one_time;target:adjacent
-mouse,4060,4077,"[{""a"":""type"",""b"":""ninja""}]",,null,one_time;target:adjacent
-chemical_seven,4078,4082,[],destroyed,true,
-chemical_seven,4078,4083,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""chemical_seven""}]",value_bonus,"{""$dyn"":""int(values[0])""}",
-hustler,4084,4091,[],destroyed,true,
-hustler,4084,4092,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""hustler""}]",,null,
-hustler,4084,4093,"[{""a"":""type"",""b"":""hustler""},{""a"":""destroyed"",""b"":true}]",,null,
-witch,4094,4096,"[{""a"":""groups"",""b"":""witchlikes""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-hex_of_tedium,4097,4103,"[{""a"":""type"",""b"":""hex_of_tedium""}]",uncommon,"{""$dyn"":""1.0 + (1.0 - values[0])""}",multiply
-hex_of_tedium,4097,4104,"[{""a"":""type"",""b"":""hex_of_tedium""}]",rare,"{""$dyn"":""1.0 + (1.0 - values[0])""}",multiply
-hex_of_tedium,4097,4105,"[{""a"":""type"",""b"":""hex_of_tedium""}]",very_rare,"{""$dyn"":""1.0 + (1.0 - values[0])""}",multiply
-hex_of_thievery,4106,4113,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",value_bonus,"{""$dyn"":""-values[1]""}",
-hex_of_destruction,4114,4130,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""values"",""rand"":true},{""a"":""destroyed"",""b"":false,""not_prev"":true},{""a"":""destroyed"",""b"":false,""not_prev"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""},{""a"":""indestructible"",""b"":false}]",destroyed,true,target:adjacent
-hex_of_emptiness,4132,4143,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":null,""b"":false,""dynamic_a_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_a_key"":""hex_of_hoarding_trigger""}]",hex_of_emptiness_trigger,true,
-dwarf,4144,4149,"[{""a"":""groups"",""b"":""dwarflikes""}]",destroyed,true,target:adjacent
-dwarf,4144,4150,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""dwarflikes""}]",value_bonus,null,"target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
-dwarf,4144,4152,"[{""a"":""groups"",""b"":""minerlikes"",""not_prev"":true}]",destroyed,true,target:adjacent
-dwarf,4144,4153,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""minerlikes""}]",value_bonus,null,"target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
-bartender,4154,4156,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-king_midas,4157,4158,[],,null,
-king_midas,4157,4160,"[{""a"":""type"",""b"":""golden_egg""}]",achievement_value,1,target:self
-king_midas,4157,4161,"[{""a"":""type"",""b"":""coin""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-farmer,4162,4164,"[{""a"":""groups"",""b"":""farmerlikes""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-farmer,4162,4165,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",target:adjacent
-buffing_powder,4166,4176,[],value_multiplier,"{""$dyn"":""pow(values[0], capsule_machine_multiplier)""}",target:adjacent
-buffing_powder,4166,4177,[],destroyed,true,
-buffing_powder,4166,4178,"[{""a"":""type"",""b"":""buffing_powder""},{""a"":""destroyed"",""b"":true}]",,null,
-snail|magpie|owl,4179,4187,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-snail|magpie|owl,4179,4188,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,overwrite
-sloth,4189,4197,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-sloth,4189,4198,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,overwrite
-sloth,4189,4200,"[{""a"":""type"",""b"":""snail""}]",achievement_value,1,target:self
-sloth,4189,4201,"[{""a"":""type"",""b"":""turtle""}]",achievement_value,1,target:self
-turtle,4202,4210,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-turtle,4202,4211,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,overwrite
-turtle,4202,4212,"[{""a"":""type"",""b"":""turtle""},{""a"":""grid_position_x"",""b"":0}]",saved_achievement_value,1,
-turtle,4202,4214,"[{""a"":""type"",""b"":""turtle""},{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}}]",achievement_value,1,
-crow,4216,4217,"[{""a"":""times_displayed"",""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-crow,4216,4218,"[{""a"":""times_displayed"",""b"":{""$self_index"":1},""greater_than_eq"":true}]",times_displayed,0,overwrite
-rarity_capsule,4219,4228,[],destroyed,true,
-rarity_capsule,4219,4229,"[{""a"":""type"",""b"":""rarity_capsule""}]",forced_rarities,"{""forced_rarity"":{""$dyn"":""rarity_arr""},""or_better"":true}",
-rarity_capsule,4219,4230,"[{""a"":""type"",""b"":""rarity_capsule""},{""a"":""destroyed"",""b"":true}]",,null,
-shiny_pebble,4231,4233,"[{""a"":""type"",""b"":""shiny_pebble""}]",uncommon,"{""$self_index"":0}",multiply
-shiny_pebble,4231,4234,"[{""a"":""type"",""b"":""shiny_pebble""}]",rare,"{""$self_index"":0}",multiply
-shiny_pebble,4231,4235,"[{""a"":""type"",""b"":""shiny_pebble""}]",very_rare,"{""$self_index"":0}",multiply
-goose,4236,4238,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-monkey,4239,4241,"[{""a"":""groups"",""b"":""monkeylikes""}]",destroyed,true,target:adjacent
-monkey,4239,4242,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""monkeylikes""}]",value_bonus,null,"target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
-banana_peel,4243,4245,"[{""a"":""type"",""b"":""thief"",""not_prev"":true}]",destroyed,true,target:adjacent
-banana_peel,4243,4247,"[{""a"":""type"",""b"":""comedian"",""not_prev"":true}]",destroyed,true,gated:has_unmodded_item;target:adjacent
-item_capsule,4248,4255,[],destroyed,true,
-item_capsule,4248,4256,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""item_capsule""}]",,null,
-item_capsule,4248,4257,"[{""a"":""type"",""b"":""item_capsule""},{""a"":""destroyed"",""b"":true}]",,null,
-banana,4258,4259,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""banana""}]",,null,
-hex_of_draining,4260,4277,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",drained,true,
-big_ore,4278,4293,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""big_ore""}]",,null,
-void_creature,4294,4297,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-void_creature,4294,4301,[],destroyed,true,
-void_creature,4294,4302,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_creature""}]",value_bonus,"{""$self_index"":2}",
-void_stone,4303,4306,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-void_stone,4303,4310,[],destroyed,true,
-void_stone,4303,4311,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_stone""}]",value_bonus,"{""$self_index"":2}",
-void_fruit,4312,4315,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-void_fruit,4312,4319,[],destroyed,true,
-void_fruit,4312,4320,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_fruit""}]",value_bonus,"{""$self_index"":2}",
-void_fruit,4312,4321,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,
-mine,4322,4323,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""less_than"":true}]",,null,
-mine,4322,4324,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true}]",destroyed,true,
-mine,4322,4328,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""mine""}]",,null,
-golem,4329,4335,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-golem,4329,4339,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""golem""}]",,null,
-dame,4340,4342,"[{""a"":""groups"",""b"":""gem""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-dame,4340,4343,"[{""a"":""type"",""b"":""martini""}]",destroyed,true,target:adjacent
-dame,4340,4344,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""martini""}]",value_bonus,"{""$self_index"":1}",target:self
-dame,4340,4345,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""martini""}]",achievement_value,1,target:self
-dame,4340,4346,"[{""a"":""type"",""b"":""diamond""}]",achievement_value,1,target:self
-key,4347,4349,"[{""a"":""groups"",""b"":""chest"",""not_prev"":true},{""a"":""tbd"",""b"":false}]",destroyed,true,target:adjacent
-coconut,4350,4354,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""coconut""}]",,null,
-crab,4355,4358,"[{""a"":""type"",""b"":""crab""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-crab,4355,4359,"[{""a"":""type"",""b"":""crab""}]",achievement_value,1,target:adjacent
-archaeologist,4360,4362,"[{""a"":""groups"",""b"":""archlikes""}]",destroyed,true,target:adjacent
-archaeologist,4360,4363,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-archaeologist,4360,4364,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-archaeologist,4360,4365,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",destroyed_or_removed_by,"{""$dyn"":""t""}",target:adjacent
-mrs_fruit,4366,4368,"[{""a"":""groups"",""b"":""fruitlikes"",""not_prev"":true}]",destroyed,true,target:adjacent
-mrs_fruit,4366,4369,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""fruitlikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-clubs|spades,4370,4376,[],value_bonus,"{""$self_index"":1}",
-clubs|spades,4370,4379,"[{""a"":""type"",""b"":""diamonds""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",target:adjacent
-clubs|spades,4370,4380,"[{""a"":""type"",""b"":""hearts""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",target:adjacent
-clubs|spades,4370,4381,"[{""a"":""type"",""b"":""clubs""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-clubs|spades,4370,4382,"[{""a"":""type"",""b"":""spades""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-diamonds|hearts,4383,4389,[],value_bonus,"{""$self_index"":1}",
-diamonds|hearts,4383,4392,"[{""a"":""type"",""b"":""clubs""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",target:adjacent
-diamonds|hearts,4383,4393,"[{""a"":""type"",""b"":""spades""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",target:adjacent
-diamonds|hearts,4383,4394,"[{""a"":""type"",""b"":""diamonds""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-diamonds|hearts,4383,4395,"[{""a"":""type"",""b"":""hearts""}]",value_bonus,"{""$self_index"":0}",target:adjacent
-matryoshka_doll_1,4396,4402,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-matryoshka_doll_1,4396,4405,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_1""}]",,null,
-matryoshka_doll_2,4406,4412,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-matryoshka_doll_2,4406,4415,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_2""}]",,null,
-matryoshka_doll_3,4416,4422,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-matryoshka_doll_3,4416,4425,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_3""}]",,null,
-matryoshka_doll_4,4426,4432,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-matryoshka_doll_4,4426,4435,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_4""}]",,null,
-oyster,4436,4438,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-oyster,4436,4439,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""oyster""}]",,null,
-card_shark,4440,4442,"[{""a"":""groups"",""b"":""suit""}]",wildcarded,true,target:adjacent
-diver,4443,4445,"[{""a"":""groups"",""b"":""poslikes""}]",removed,true,target:adjacent
-diver,4443,4446,"[{""a"":""removed"",""b"":true},{""a"":""groups"",""b"":""poslikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-bronze_arrow|silver_arrow|golden_arrow,4447,4455,"[{""a"":""pointing_directions"",""b"":0},{""a"":""destroyed"",""b"":false,""not_prev"":true}]",pointing_directions,"{""$dyn"":""direction_arr""}",overwrite
-bronze_arrow|silver_arrow|golden_arrow,4447,4457,"[{""a"":""destroyed"",""b"":false,""not_prev"":true}]",,null,
-bronze_arrow|silver_arrow|golden_arrow,4447,4458,"[{""a"":""destroyed"",""b"":false,""not_prev"":true}]",,null,
-bronze_arrow|silver_arrow|golden_arrow,4447,4464,[],value_multiplier,"{""$self_index"":0}",target:adjacent
-bronze_arrow|silver_arrow|golden_arrow,4447,4465,"[{""a"":""type"",""b"":""target""}]",destroyed,true,target:adjacent
-reroll_capsule,4466,4472,[],destroyed,true,
-reroll_capsule,4466,4473,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""reroll_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",
-removal_capsule,4474,4480,[],destroyed,true,
-removal_capsule,4474,4481,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""removal_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",
-hooligan,4482,4484,"[{""a"":""groups"",""b"":""spiritbox""}]",destroyed,true,target:adjacent
-hooligan,4482,4485,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""spiritbox""}]",value_bonus,"{""$self_index"":0}",target:self
-tedium_capsule,4486,4495,[],destroyed,true,
-tedium_capsule,4486,4496,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""tedium_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",
-tedium_capsule,4486,4497,"[{""a"":""type"",""b"":""tedium_capsule""}]",forced_rarities,"{""forced_rarity"":{""$dyn"":""rarity_arr""},""or_better"":false}",
-tedium_capsule,4486,4498,"[{""a"":""type"",""b"":""tedium_capsule""},{""a"":""destroyed"",""b"":true}]",,null,
-target,4499,4500,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""target""}]",value_bonus,"{""$self_index"":0}",
-billionaire,4501,4503,"[{""a"":""groups"",""b"":""richlikes""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-billionaire,4501,4504,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""billionaire""}]",value_bonus,"{""$self_index"":1}",
-magic_key,4505,4507,"[{""a"":""groups"",""b"":""chest"",""not_prev"":true},{""a"":""tbd"",""b"":false}]",destroyed,true,target:adjacent
-magic_key,4505,4508,"[{""a"":""groups"",""b"":""chest""},{""a"":""destroyed"",""b"":true},{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",value_multiplier,"{""$self_index"":0}",one_time;target:adjacent
-pirate,4509,4511,"[{""a"":""groups"",""b"":""piratelikes"",""not_prev"":true}]",destroyed,true,target:adjacent
-pirate,4509,4512,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-pirate,4509,4513,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",permanent_bonus,"{""$self_index"":0}",target:self
-pirate,4509,4514,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",destroyed_or_removed_by,"{""$dyn"":""t""}",target:adjacent
-bar_of_soap,4515,4516,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""less_than"":true}]",,null,
-bar_of_soap,4515,4517,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true}]",destroyed,true,
-bar_of_soap,4515,4518,[],saved_achievement_value,1,
-anchor,4519,4520,"[{""a"":""grid_position_x"",""b"":0},{""a"":""grid_position_y"",""b"":0}]",value_bonus,"{""$self_index"":0}",
-anchor,4519,4521,"[{""a"":""grid_position_x"",""b"":0},{""a"":""grid_position_y"",""b"":{""$dyn"":""reels.reel_height - 1""}}]",value_bonus,"{""$self_index"":0}",
-anchor,4519,4522,"[{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}},{""a"":""grid_position_y"",""b"":0}]",value_bonus,"{""$self_index"":0}",
-anchor,4519,4523,"[{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}},{""a"":""grid_position_y"",""b"":{""$dyn"":""reels.reel_height - 1""}}]",value_bonus,"{""$self_index"":0}",
-hex_of_hoarding,4524,4531,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":null,""b"":false,""dynamic_a_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_a_key"":""hex_of_emptiness_trigger""}]",hex_of_hoarding_trigger,true,
-hex_of_midas,4532,4539,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-cow,4540,4542,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,
-frozen_fossil,4543,4549,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true,""dynamic_b_mod_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_b_mod_key"":""fossil_diff"",""dynamic_b_mod_multiplier"":{""$dyn"":""-values[1]""}},{""a"":""tbd"",""b"":false}]",destroyed,true,
-frozen_fossil,4543,4552,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""frozen_fossil""}]",,null,
-eldritch_beast,4553,4555,"[{""a"":""groups"",""b"":""fossillikes""},{""a"":""destroyed"",""b"":false}]",destroyed,true,target:adjacent
-eldritch_beast,4553,4556,[],value_bonus,"{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\"".fossil_diff * values[0]""}",overwrite
-robin_hood,4557,4565,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-robin_hood,4557,4566,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,overwrite
-robin_hood,4557,4568,"[{""a"":""groups"",""b"":""robinlikes""}]",value_bonus,"{""$self_index"":2}",target:adjacent
-robin_hood,4557,4569,"[{""a"":""groups"",""b"":""robinhates""}]",destroyed,true,target:adjacent
-robin_hood,4557,4570,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""robinhates""}]",value_bonus,"{""$self_index"":3}",target:self
-rabbit,4571,4572,"[{""a"":""times_displayed"",""b"":{""$self_index"":1}}]",permanent_bonus,"{""$self_index"":0}",
-rabbit,4571,4577,[],,null,gated:has_unmodded_item
-rabbit,4571,4578,[],,null,gated:has_unmodded_item
-rabbit,4571,4581,"[{""a"":""type"",""b"":""turtle""}]",,null,target:adjacent
-present,4582,4588,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,
-present,4582,4589,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""present""}]",value_bonus,"{""$self_index"":1}",
-watermelon,4590,4591,"[{""a"":""type"",""b"":""watermelon""},{""a"":{""counted_symbols"":""watermelon""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""watermelon""}",
-watermelon,4590,4593,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,gated:has_unmodded_item
-flower,4594,4595,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,
-essence_capsule,4596,4602,[],destroyed,true,
-essence_capsule,4596,4603,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""essence_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",
-dud,4604,4605,"[{""a"":""times_displayed"",""b"":{""$self_index"":0},""greater_than_eq"":true}]",destroyed,true,
-dog,4606,4613,"[{""a"":""type"",""b"":""dog"",""not_prev"":true}]",type,"""wolf""",
-comedian,4614,4616,"[{""a"":""groups"",""b"":""funny""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-comedian,4614,4618,"[{""a"":""groups"",""b"":""darkhumor""}]",value_multiplier,"{""$dyn"":""pow(items[item_types.find(\""dark_humor\"")].values[1], items[item_types.find(\""dark_humor\"")].item_count)""}",gated:has_unmodded_item;target:adjacent
-comedian,4614,4620,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""comedian""}]",,null,gated:has_unmodded_item
-light_bulb,4621,4623,"[{""a"":""groups"",""b"":""gem""}]",saved_value,1,target:self
-light_bulb,4621,4624,"[{""a"":""groups"",""b"":""gem""}]",value_multiplier,"{""$self_index"":0}",target:adjacent
-light_bulb,4621,4625,"[{""a"":""saved_value"",""b"":{""$self_index"":1},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,
-time_capsule,4626,4628,[],destroyed,true,
-time_capsule,4626,4637,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""time_capsule"",""not_prev"":true}]",,null,
-time_capsule,4626,4638,"[{""a"":""type"",""b"":""time_capsule""},{""a"":""destroyed"",""b"":true}]",,null,
-peach,4639,4640,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""peach""}]",,null,
-peach,4639,4641,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,
-apple,4642,4643,"[{""a"":""type"",""b"":""seed""}]",grown_apples,1,
-apple,4642,4644,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,
-strawberry,4645,4646,"[{""a"":""type"",""b"":{""$dyn"":""t""}},{""a"":{""counted_symbols"":{""$dyn"":""t""}},""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-strawberry,4645,4647,"[{""a"":""type"",""b"":""seed""}]",grown_strawberries,1,
-strawberry,4645,4648,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,
-ruby|emerald,4649,4650,"[{""a"":""type"",""b"":{""$dyn"":""t""}},{""a"":{""counted_symbols"":{""$dyn"":""t""}},""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",
-wine,4651,4652,"[{""a"":""times_displayed"",""b"":{""$self_index"":1}}]",permanent_bonus,"{""$self_index"":0}",
-wine,4651,4653,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""wine""}]",,null,
-beer,4654,4655,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""beer""}]",,null,
-goldfish,4656,4658,"[{""a"":""type"",""b"":""bubble""}]",destroyed,true,target:adjacent
-goldfish,4656,4659,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""bubble""}]",value_bonus,"{""$self_index"":0}",target:self
-gambler,4660,4661,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""gambler""}]",value_bonus,"{""$dyn"":""times_displayed * values[1]""}",
-dove,4662,4664,[],indestructible,true,target:adjacent
-sand_dollar,4665,4666,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""sand_dollar""}]",value_bonus,"{""$self_index"":0}",
-jellyfish,4667,4668,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""jellyfish""}]",value_bonus,"{""$self_index"":0}",
-pufferfish,4669,4670,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""pufferfish""}]",value_bonus,"{""$self_index"":0}",
-pufferfish,4669,4717,"[{""a"":""removed"",""b"":true,""not_prev"":true}]",type,"""empty""",
+symbol,branch_line,line,comparisons,vtc,diff,tiles_to_add,stats,flags
+*fineprint*,0,3700,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",bonus_value_multipliers,"{""$fp"":0}",,,when:fp:8;when:fp_icon:any;slot:0
+*fineprint*,0,3702,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}},{""a"":""destroyed"",""b"":true}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,when:fp:9;when:fp_icon:any
+*fineprint*,0,3704,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",indestructible,true,,,"when:any_fp:10,36;when:fp_icon:any"
+*fineprint*,0,3706,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",,,"when:any_fp:19,28,32;when:fp_icon:any"
+*fineprint*,0,3708,"[{""a"":""type"",""b"":{""$dyn"":""fp.dynamic_icon""}}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,"when:any_fp:27,29,33,35;when:fp_icon:any"
+*fineprint*,0,3714,"[{""a"":""non_prev_final_value"",""b"":0,""less_than"":true}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,when:fp:16;when:no_fp_icon:any
+*fineprint*,0,3716,"[{""a"":""type"",""b"":""coin""}]",indestructible,true,,,when:fp:20;when:no_fp_icon:any
+*fineprint*,0,3718,"[{""a"":""type"",""b"":""egg""}]",indestructible,true,,,when:fp:21;when:no_fp_icon:any
+*fineprint*,0,3720,"[{""a"":""rarity"",""b"":""very_rare""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,when:fp:26;when:no_fp_icon:any
+*fineprint*,0,3722,"[{""a"":""type"",""b"":""dwarf""}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",,,when:fp:28;when:no_fp_icon:any
+*fineprint*,0,3724,"[{""a"":""type"",""b"":""monkey""}]",value_multiplier,"{""$dyn"":""fp.values[0] / 100.0""}",,,when:fp:32;when:no_fp_icon:any
+*fineprint*,0,3726,"[{""a"":""type"",""b"":""d3""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,when:fp:29;when:no_fp_icon:any
+*fineprint*,0,3728,"[{""a"":""type"",""b"":""d5""}]",value_bonus,"{""$dyn"":""-fp.values[0]""}",,,when:fp:35;when:no_fp_icon:any
+*global*,0,3733,"[{""a"":""type"",""b"":""dog"",""not_prev"":true}]",value_bonus,"{""$ref"":""dog"",""$index"":0}",,"[{""k"":""time_spent_petting_dog"",""d"":0.009722}]",one_time;when:group:doglikes;target:adjacent
+*global*,0,3736,"[{""a"":""type"",""b"":""bee"",""not_prev"":true}]",value_bonus,"{""$ref"":""bee"",""$index"":1}",,,when:group:beelikes;target:adjacent
+*global*,0,3739,"[{""a"":""type"",""b"":""omelette"",""not_prev"":true}]",value_bonus,"{""$ref"":""omelette"",""$index"":0}",,,one_time;when:group:omelettestuff;target:adjacent
+*global*,0,3742,"[{""a"":""type"",""b"":""egg"",""not_prev"":true}]",destroyed,true,,,"one_time;when:any_item:frying_pan,frying_pan_essence;when:group:omelettestuff;target:adjacent;consumes:frying_pan_essence"
+d5|d3,3755,3761,[],value_bonus,"{""$dyn"":""floor(rand_range(values[0], values[1] + 1))""}",,,when:no_item:lucky_dice;when:no_item:lucky_dice_essence
+d5|d3,3755,3763,[],value_bonus,"{""$self_index"":1}",,,"when:any_item:lucky_dice,lucky_dice_essence"
+joker,3764,3766,"[{""a"":""groups"",""b"":""suit""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+seed,3767,3785,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,,,when:item:fertilizer_essence;when:no_fp:34;group:plant;min_rarity:very_rare;consumes:fertilizer_essence
+seed,3767,3788,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,,,when:item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant;min_rarity:rare
+seed,3767,3791,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,,,when:item:compost_heap;when:no_item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant;min_rarity:uncommon
+seed,3767,3794,"[{""a"":""type"",""b"":""seed"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,null,,,when:no_item:compost_heap;when:no_item:fertilizer;when:no_item:fertilizer_essence;when:no_fp:34;group:plant
+ore,3795,3807,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""ore""}]",,null,"[{""group"":""gem"",""count"":1}]",,when:no_item:x_ray_machine;when:no_item:x_ray_machine_essence;spawn_alt
+coal,3808,3814,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",type,"""diamond""",,,
+coal,3808,3815,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+diamond,3816,3817,"[{""a"":""type"",""b"":""diamond""},{""a"":{""counted_symbols"":""diamond""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""diamond""}",,,
+bounty_hunter,3818,3824,"[{""a"":""groups"",""b"":""human""}]",destroyed,true,,,when:item:zaroffs_contract;target:adjacent;consumes:zaroffs_contract_essence
+bounty_hunter,3818,3825,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""human""}]",value_bonus,"{""$dyn"":""zaroffs_contract.values[0] * zaroffs_contract.item_count""}",,,when:item:zaroffs_contract;target:self
+bounty_hunter,3818,3826,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$self_index"":0}",,,when:item:zaroffs_contract;target:self;consumes:wanted_poster_essence
+bounty_hunter,3818,3829,"[{""a"":""type"",""b"":""thief""}]",destroyed,true,,,when:no_item:zaroffs_contract;target:adjacent;consumes:zaroffs_contract_essence
+bounty_hunter,3818,3830,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$self_index"":0}",,,when:no_item:zaroffs_contract;target:self;consumes:wanted_poster_essence
+midas_bomb,3831,3839,"[{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",destroyed,true,,,target:adjacent
+midas_bomb,3831,3840,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":{""$dyn"":""i.type""},""not_prev"":true},{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+midas_bomb,3831,3841,[],destroyed,true,,,
+thief,3844,3845,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""thief""}]",value_bonus,"{""$dyn"":""times_displayed * values[1]""}",,,
+ninja,3846,3858,"[{""a"":""type"",""b"":""ninja""},{""a"":{""counted_symbols"":""ninja""},""b"":0,""greater_than"":true}]",value_bonus,"{""$dyn"":""(-values[0] + cursed_katana_diff) * reels.counted_symbols[\""ninja\""]""}",,,
+ninja,3846,3861,"[{""a"":""type"",""b"":""mouse""}]",value_multiplier,"{""$dyn"":""pow(ninja_and_mouse.values[0], ninja_and_mouse.item_count)""}",,,one_time;when:item:ninja_and_mouse;target:adjacent
+ninja,3846,3864,"[{""a"":""type"",""b"":""mouse""}]",,null,,,"one_time;when:any_item:ninja_and_mouse_essence,ninja_and_mouse;target:adjacent;consumes:ninja_and_mouse_essence"
+bear,3865,3867,"[{""a"":""type"",""b"":""honey""}]",destroyed,true,,,target:adjacent
+bear,3865,3868,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""honey""}]",value_bonus,"{""$self_index"":0}",,,target:self;consumes:maxwell_the_bear_essence
+bee,3869,3871,"[{""a"":""groups"",""b"":""beelikes""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+beehive,3872,3874,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""honey"",""count"":1}]",,
+rain,3875,3877,"[{""a"":""type"",""b"":""flower""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent;consumes:rain_cloud_essence
+rain,3875,3878,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",,,target:adjacent;slot:0
+lockbox,3879,3880,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""lockbox""}]",value_bonus,"{""$self_index"":0}",,,
+beastmaster,3881,3883,"[{""a"":""groups"",""b"":""animal""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+wildcard,3884,3885,"[{""a"":""type"",""b"":""wildcard""}]",wildcarded,true,,,
+treasure_chest,3886,3887,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""treasure_chest""}]",value_bonus,"{""$self_index"":0}",,,
+safe,3888,3889,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""safe""}]",value_bonus,"{""$self_index"":0}",,,
+pinata,3890,3894,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""pinata""}]",,null,"[{""type"":""candy"",""count"":{""$self_index"":0}}]",,
+lucky_capsule,3895,3901,[],destroyed,true,,,
+lucky_capsule,3895,3902,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""lucky_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+moon,3903,3906,"[{""a"":""groups"",""b"":""night""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+moon,3903,3914,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""moon""}]",,null,"[{""type"":""cheese"",""count"":{""$self_index"":0}}]",,
+sun,3915,3920,"[{""a"":""type"",""b"":""flower""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+sun,3915,3921,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",,,target:adjacent;slot:0
+sun,3915,3924,"[{""a"":""type"",""b"":""moon""}]",,null,,,when:item:clear_sky_essence;target:adjacent;consumes:clear_sky_essence
+chef,3925,3927,"[{""a"":""groups"",""b"":""food""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+mega_chest,3928,3929,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""mega_chest""}]",value_bonus,"{""$self_index"":0}",,,
+cultist,3930,3931,"[{""a"":""type"",""b"":""cultist""},{""a"":{""counted_symbols"":""cultist""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""cultist""}",,,
+cultist,3930,3932,"[{""a"":""type"",""b"":""cultist""},{""a"":{""counted_symbols"":""cultist""},""b"":{""$dyn"":""values[2] - 1""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":1}",,,
+spirit,3933,3935,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,"[{""group"":""organism"",""count"":1}]",,when:item:shrine_essence;when:no_item:undertaker
+spirit,3933,3937,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,,,when:no_item:shrine_essence;when:no_item:undertaker
+bubble,3938,3939,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,,,
+tomb,3940,3942,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""spirit"",""count"":1}]",,
+tomb,3940,3960,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""tomb""}]",,null,"[{""type"":""spirit"",""count"":{""$self_index"":1}}]",,consumes:grave_robber_essence;spawnmul
+urn,3961,3979,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""urn""}]",,null,"[{""type"":""spirit"",""count"":1}]",,consumes:grave_robber_essence;spawnmul
+big_urn,3980,3998,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""big_urn""}]",,null,"[{""type"":""spirit"",""count"":{""$self_index"":0}}]",,consumes:grave_robber_essence;spawnmul
+cat,3999,4013,"[{""a"":""type"",""b"":""cat""}]",uncommon,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",,,when:item:lucky_cat;multiply;raritymod
+cat,3999,4014,"[{""a"":""type"",""b"":""cat""}]",rare,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",,,when:item:lucky_cat;multiply;raritymod
+cat,3999,4015,"[{""a"":""type"",""b"":""cat""}]",very_rare,"{""$dyn"":""lucky_cat.values[0] * items[item_types.find(\""lucky_cat\"")].item_count""}",,,when:item:lucky_cat;multiply;raritymod
+cat,3999,4020,"[{""a"":""type"",""b"":""milk""}]",destroyed,true,,,target:adjacent;consumes:pizza_the_cat_essence
+cat,3999,4021,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""milk""}]",value_bonus,"{""$self_index"":0}",,,target:self
+toddler,4022,4024,"[{""a"":""type"",""b"":""candy""},{""a"":""destroyed"",""b"":true}]",,null,,,target:adjacent;consumes:jackolantern_essence
+toddler,4022,4025,"[{""a"":""groups"",""b"":""toddlerlikes""}]",destroyed,true,,,target:adjacent
+toddler,4022,4026,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""toddlerlikes""}]",value_bonus,"{""$self_index"":0}",,,target:self
+general_zaroff,4027,4029,"[{""a"":""groups"",""b"":""human""}]",destroyed,true,,"[{""k"":""humans_murdered_by_general_zaroff"",""d"":1}]",target:adjacent;consumes:zaroffs_contract_essence
+general_zaroff,4027,4030,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""human""}]",value_bonus,"{""$self_index"":0}",,,target:self
+miner,4031,4033,"[{""a"":""groups"",""b"":""minerlikes""}]",destroyed,true,,,target:adjacent
+miner,4031,4034,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""minerlikes""}]",value_bonus,"{""$self_index"":0}",,,target:self
+rabbit_fluff,4035,4037,"[{""a"":""type"",""b"":""rabbit_fluff""}]",uncommon,"{""$self_index"":0}",,,multiply;raritymod
+rabbit_fluff,4035,4038,"[{""a"":""type"",""b"":""rabbit_fluff""}]",rare,"{""$self_index"":0}",,,multiply;raritymod
+rabbit_fluff,4035,4039,"[{""a"":""type"",""b"":""rabbit_fluff""}]",very_rare,"{""$self_index"":0}",,,multiply;raritymod
+chicken,4040,4041,"[{""a"":""type"",""b"":""egg""},{""a"":""type"",""b"":""chick""}]",achievement_value,1,,,
+chicken,4040,4043,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""egg"",""count"":1}]",,
+chicken,4040,4045,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":1,""rand"":true}]",,null,"[{""type"":""golden_egg"",""count"":1}]",,
+chicken,4040,4046,"[{""a"":""type"",""b"":""egg""},{""a"":""type"",""b"":""chick""}]",,null,,,consumes:chicken_coop_essence
+chick,4047,4049,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",type,"""chicken""",,,
+egg,4050,4052,"[{""a"":""type"",""b"":""golden_egg""}]",achievement_value,1,,,target:self
+egg,4050,4054,"[{""a"":""type"",""b"":""egg"",""not_prev"":true},{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":""destroyed"",""b"":false}]",type,"""chick""",,,
+cheese,4055,4057,"[{""a"":""type"",""b"":""milk""}]",achievement_value,1,,,target:self
+cheese,4055,4058,"[{""a"":""type"",""b"":""omelette""}]",achievement_value,1,,,target:self
+cheese,4055,4059,"[{""a"":""type"",""b"":""egg""}]",achievement_value,1,,,target:self
+mouse,4060,4062,"[{""a"":""type"",""b"":""cheese""}]",destroyed,true,,,target:adjacent
+mouse,4060,4063,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""cheese""}]",value_bonus,"{""$self_index"":0}",,,target:self
+mouse,4060,4064,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""cheese""}]",achievement_value,1,,,target:self
+mouse,4060,4065,"[{""a"":""type"",""b"":""ninja""}]",achievement_value,1,,,target:self
+mouse,4060,4074,"[{""a"":""type"",""b"":""ninja""}]",value_multiplier,"{""$dyn"":""pow(ninja_and_mouse.values[0], ninja_and_mouse.item_count)""}",,,one_time;when:item:ninja_and_mouse;target:adjacent
+mouse,4060,4077,"[{""a"":""type"",""b"":""ninja""}]",,null,,,"one_time;when:any_item:ninja_and_mouse_essence,ninja_and_mouse;target:adjacent;consumes:ninja_and_mouse_essence"
+chemical_seven,4078,4082,[],destroyed,true,,,
+chemical_seven,4078,4083,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""chemical_seven""}]",value_bonus,"{""$dyn"":""int(values[0])""}",,,
+hustler,4084,4091,[],destroyed,true,,,
+hustler,4084,4092,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""hustler""}]",,null,,,consumes:capsule_machine_essence
+hustler,4084,4093,"[{""a"":""type"",""b"":""hustler""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+witch,4094,4096,"[{""a"":""groups"",""b"":""witchlikes""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+hex_of_tedium,4097,4103,"[{""a"":""type"",""b"":""hex_of_tedium""}]",uncommon,"{""$dyn"":""1.0 + (1.0 - values[0])""}",,,when:no_item:holy_water;when:no_item:holy_water_essence;multiply;raritymod
+hex_of_tedium,4097,4104,"[{""a"":""type"",""b"":""hex_of_tedium""}]",rare,"{""$dyn"":""1.0 + (1.0 - values[0])""}",,,when:no_item:holy_water;when:no_item:holy_water_essence;multiply;raritymod
+hex_of_tedium,4097,4105,"[{""a"":""type"",""b"":""hex_of_tedium""}]",very_rare,"{""$dyn"":""1.0 + (1.0 - values[0])""}",,,when:no_item:holy_water;when:no_item:holy_water_essence;multiply;raritymod
+hex_of_thievery,4106,4113,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",value_bonus,"{""$dyn"":""-values[1]""}",,,when:no_item:holy_water;when:no_item:holy_water_essence
+hex_of_destruction,4114,4130,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""values"",""rand"":true},{""a"":""destroyed"",""b"":false,""not_prev"":true},{""a"":""destroyed"",""b"":false,""not_prev"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""},{""a"":""indestructible"",""b"":false}]",destroyed,true,,,target:adjacent
+hex_of_emptiness,4132,4143,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":null,""b"":false,""dynamic_a_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_a_key"":""hex_of_hoarding_trigger""}]",hex_of_emptiness_trigger,true,,,
+dwarf,4144,4149,"[{""a"":""groups"",""b"":""dwarflikes""}]",destroyed,true,,,target:adjacent;consumes:dwarven_anvil_essence
+dwarf,4144,4150,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""dwarflikes""}]",value_bonus,null,,,"target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
+dwarf,4144,4152,"[{""a"":""groups"",""b"":""minerlikes"",""not_prev"":true}]",destroyed,true,,,when:item:dwarven_anvil;target:adjacent;consumes:dwarven_anvil_essence
+dwarf,4144,4153,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""minerlikes""}]",value_bonus,null,,,"when:item:dwarven_anvil;target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
+bartender,4154,4156,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""group"":""booze"",""count"":1}]",,
+king_midas,4157,4158,[],,null,"[{""type"":""coin"",""count"":1}]",,
+king_midas,4157,4160,"[{""a"":""type"",""b"":""golden_egg""}]",achievement_value,1,,,target:self
+king_midas,4157,4161,"[{""a"":""type"",""b"":""coin""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+farmer,4162,4164,"[{""a"":""groups"",""b"":""farmerlikes""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+farmer,4162,4165,"[{""a"":""type"",""b"":""seed""}]",bonus_values,"{""$self_index"":1}",,,target:adjacent;slot:0
+buffing_powder,4166,4176,[],value_multiplier,"{""$dyn"":""pow(values[0], capsule_machine_multiplier)""}",,,target:adjacent
+buffing_powder,4166,4177,[],destroyed,true,,,
+buffing_powder,4166,4178,"[{""a"":""type"",""b"":""buffing_powder""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+snail|magpie|owl,4179,4187,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+snail|magpie|owl,4179,4188,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+sloth,4189,4197,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+sloth,4189,4198,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+sloth,4189,4200,"[{""a"":""type"",""b"":""snail""}]",achievement_value,1,,,target:self
+sloth,4189,4201,"[{""a"":""type"",""b"":""turtle""}]",achievement_value,1,,,target:self
+turtle,4202,4210,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+turtle,4202,4211,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+turtle,4202,4212,"[{""a"":""type"",""b"":""turtle""},{""a"":""grid_position_x"",""b"":0}]",saved_achievement_value,1,,,
+turtle,4202,4214,"[{""a"":""type"",""b"":""turtle""},{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}}]",achievement_value,1,,,
+crow,4216,4217,"[{""a"":""times_displayed"",""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+crow,4216,4218,"[{""a"":""times_displayed"",""b"":{""$self_index"":1},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+rarity_capsule,4219,4228,[],destroyed,true,,,
+rarity_capsule,4219,4229,"[{""a"":""type"",""b"":""rarity_capsule""}]",forced_rarities,"{""forced_rarity"":{""$dyn"":""rarity_arr""},""or_better"":true}",,,
+rarity_capsule,4219,4230,"[{""a"":""type"",""b"":""rarity_capsule""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+shiny_pebble,4231,4233,"[{""a"":""type"",""b"":""shiny_pebble""}]",uncommon,"{""$self_index"":0}",,,multiply;raritymod
+shiny_pebble,4231,4234,"[{""a"":""type"",""b"":""shiny_pebble""}]",rare,"{""$self_index"":0}",,,multiply;raritymod
+shiny_pebble,4231,4235,"[{""a"":""type"",""b"":""shiny_pebble""}]",very_rare,"{""$self_index"":0}",,,multiply;raritymod
+goose,4236,4238,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""golden_egg"",""count"":1}]",,
+monkey,4239,4241,"[{""a"":""groups"",""b"":""monkeylikes""}]",destroyed,true,,,target:adjacent;consumes:oswald_the_monkey_essence
+monkey,4239,4242,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""monkeylikes""}]",value_bonus,null,,,"target:self;diffkey:non_prev_final_value;diffmul:{""$self_index"":0}"
+banana_peel,4243,4245,"[{""a"":""type"",""b"":""thief"",""not_prev"":true}]",destroyed,true,,,target:adjacent
+banana_peel,4243,4247,"[{""a"":""type"",""b"":""comedian"",""not_prev"":true}]",destroyed,true,,,when:item:dark_humor_essence;target:adjacent
+item_capsule,4248,4255,[],destroyed,true,,,
+item_capsule,4248,4256,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""item_capsule""}]",,null,,,
+item_capsule,4248,4257,"[{""a"":""type"",""b"":""item_capsule""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+banana,4258,4259,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""banana""}]",,null,"[{""type"":""banana_peel"",""count"":1}]",,
+hex_of_draining,4260,4277,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",drained,true,,,when:no_item:holy_water;when:no_item:holy_water_essence
+big_ore,4278,4293,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""big_ore""}]",,null,"[{""group"":""gem"",""count"":{""$self_index"":0}}]",,consumes:x_ray_machine_essence;spawn_alt
+void_creature,4294,4297,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+void_creature,4294,4301,[],destroyed,true,,,
+void_creature,4294,4302,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_creature""}]",value_bonus,"{""$self_index"":2}",,,
+void_stone,4303,4306,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+void_stone,4303,4310,[],destroyed,true,,,
+void_stone,4303,4311,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_stone""}]",value_bonus,"{""$self_index"":2}",,,
+void_fruit,4312,4315,"[{""a"":""type"",""b"":""empty""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+void_fruit,4312,4319,[],destroyed,true,,,
+void_fruit,4312,4320,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""void_fruit""}]",value_bonus,"{""$self_index"":2}",,,
+void_fruit,4312,4321,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
+mine,4322,4323,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""less_than"":true}]",,null,"[{""type"":""ore"",""count"":1}]",,
+mine,4322,4324,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true}]",destroyed,true,"[{""type"":""ore"",""count"":1}]",,
+mine,4322,4328,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""mine""}]",,null,,,
+golem,4329,4335,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+golem,4329,4339,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""golem""}]",,null,"[{""type"":""ore"",""count"":{""$self_index"":0}}]",,
+dame,4340,4342,"[{""a"":""groups"",""b"":""gem""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+dame,4340,4343,"[{""a"":""type"",""b"":""martini""}]",destroyed,true,,,target:adjacent
+dame,4340,4344,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""martini""}]",value_bonus,"{""$self_index"":1}",,,target:self
+dame,4340,4345,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""martini""}]",achievement_value,1,,,target:self
+dame,4340,4346,"[{""a"":""type"",""b"":""diamond""}]",achievement_value,1,,,target:self
+key,4347,4349,"[{""a"":""groups"",""b"":""chest"",""not_prev"":true},{""a"":""tbd"",""b"":false}]",destroyed,true,,,target:adjacent
+coconut,4350,4354,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""coconut""}]",,null,"[{""type"":""coconut_half"",""count"":{""$self_index"":0}}]",,
+crab,4355,4358,"[{""a"":""type"",""b"":""crab""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+crab,4355,4359,"[{""a"":""type"",""b"":""crab""}]",achievement_value,1,,,target:adjacent
+archaeologist,4360,4362,"[{""a"":""groups"",""b"":""archlikes""}]",destroyed,true,,,target:adjacent
+archaeologist,4360,4363,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+archaeologist,4360,4364,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+archaeologist,4360,4365,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""archlikes""}]",destroyed_or_removed_by,"{""$dyn"":""t""}",,,target:adjacent
+mrs_fruit,4366,4368,"[{""a"":""groups"",""b"":""fruitlikes"",""not_prev"":true}]",destroyed,true,,,target:adjacent
+mrs_fruit,4366,4369,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""fruitlikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+clubs|spades,4370,4376,[],value_bonus,"{""$self_index"":1}",,,
+clubs|spades,4370,4379,"[{""a"":""type"",""b"":""diamonds""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",,,when:item:fifth_ace;target:adjacent
+clubs|spades,4370,4380,"[{""a"":""type"",""b"":""hearts""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",,,when:item:fifth_ace;target:adjacent
+clubs|spades,4370,4381,"[{""a"":""type"",""b"":""clubs""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+clubs|spades,4370,4382,"[{""a"":""type"",""b"":""spades""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+diamonds|hearts,4383,4389,[],value_bonus,"{""$self_index"":1}",,,
+diamonds|hearts,4383,4392,"[{""a"":""type"",""b"":""clubs""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",,,when:item:fifth_ace;target:adjacent
+diamonds|hearts,4383,4393,"[{""a"":""type"",""b"":""spades""}]",value_bonus,"{""$dyn"":""values[0] * fifth_ace.item_count""}",,,when:item:fifth_ace;target:adjacent
+diamonds|hearts,4383,4394,"[{""a"":""type"",""b"":""diamonds""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+diamonds|hearts,4383,4395,"[{""a"":""type"",""b"":""hearts""}]",value_bonus,"{""$self_index"":0}",,,target:adjacent
+matryoshka_doll_1,4396,4402,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+matryoshka_doll_1,4396,4405,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_1""}]",,null,"[{""type"":""matryoshka_doll_2"",""count"":1}]",,
+matryoshka_doll_2,4406,4412,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+matryoshka_doll_2,4406,4415,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_2""}]",,null,"[{""type"":""matryoshka_doll_3"",""count"":1}]",,
+matryoshka_doll_3,4416,4422,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+matryoshka_doll_3,4416,4425,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_3""}]",,null,"[{""type"":""matryoshka_doll_4"",""count"":1}]",,
+matryoshka_doll_4,4426,4432,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+matryoshka_doll_4,4426,4435,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""matryoshka_doll_4""}]",,null,"[{""type"":""matryoshka_doll_5"",""count"":1}]",,
+oyster,4436,4438,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""pearl"",""count"":1}]",,
+oyster,4436,4439,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""oyster""}]",,null,"[{""type"":""pearl"",""count"":1}]",,
+card_shark,4440,4442,"[{""a"":""groups"",""b"":""suit""}]",wildcarded,true,,,target:adjacent
+diver,4443,4445,"[{""a"":""groups"",""b"":""poslikes""}]",removed,true,,,target:adjacent
+diver,4443,4446,"[{""a"":""removed"",""b"":true},{""a"":""groups"",""b"":""poslikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+bronze_arrow|silver_arrow|golden_arrow,4447,4455,"[{""a"":""pointing_directions"",""b"":0},{""a"":""destroyed"",""b"":false,""not_prev"":true}]",pointing_directions,"{""$dyn"":""direction_arr""}",,,overwrite
+bronze_arrow|silver_arrow|golden_arrow,4447,4457,"[{""a"":""destroyed"",""b"":false,""not_prev"":true}]",,null,,,
+bronze_arrow|silver_arrow|golden_arrow,4447,4458,"[{""a"":""destroyed"",""b"":false,""not_prev"":true}]",,null,,,
+bronze_arrow|silver_arrow|golden_arrow,4447,4464,[],value_multiplier,"{""$self_index"":0}",,,target:adjacent
+bronze_arrow|silver_arrow|golden_arrow,4447,4465,"[{""a"":""type"",""b"":""target""}]",destroyed,true,,,target:adjacent
+reroll_capsule,4466,4472,[],destroyed,true,,,
+reroll_capsule,4466,4473,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""reroll_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+removal_capsule,4474,4480,[],destroyed,true,,,
+removal_capsule,4474,4481,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""removal_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+hooligan,4482,4484,"[{""a"":""groups"",""b"":""spiritbox""}]",destroyed,true,,,target:adjacent
+hooligan,4482,4485,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""spiritbox""}]",value_bonus,"{""$self_index"":0}",,,target:self
+tedium_capsule,4486,4495,[],destroyed,true,,,
+tedium_capsule,4486,4496,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""tedium_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,
+tedium_capsule,4486,4497,"[{""a"":""type"",""b"":""tedium_capsule""}]",forced_rarities,"{""forced_rarity"":{""$dyn"":""rarity_arr""},""or_better"":false}",,,
+tedium_capsule,4486,4498,"[{""a"":""type"",""b"":""tedium_capsule""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+target,4499,4500,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""target""}]",value_bonus,"{""$self_index"":0}",,,
+billionaire,4501,4503,"[{""a"":""groups"",""b"":""richlikes""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+billionaire,4501,4504,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""billionaire""}]",value_bonus,"{""$self_index"":1}",,,
+magic_key,4505,4507,"[{""a"":""groups"",""b"":""chest"",""not_prev"":true},{""a"":""tbd"",""b"":false}]",destroyed,true,,,target:adjacent
+magic_key,4505,4508,"[{""a"":""groups"",""b"":""chest""},{""a"":""destroyed"",""b"":true},{""a"":null,""b"":true,""dynamic_a_target"":{""$dyn"":""self""},""dynamic_a_key"":""destroyed""}]",value_multiplier,"{""$self_index"":0}",,,one_time;target:adjacent
+pirate,4509,4511,"[{""a"":""groups"",""b"":""piratelikes"",""not_prev"":true}]",destroyed,true,,,target:adjacent
+pirate,4509,4512,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+pirate,4509,4513,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",permanent_bonus,"{""$self_index"":0}",,,target:self
+pirate,4509,4514,"[{""a"":""removed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""piratelikes""}]",destroyed_or_removed_by,"{""$dyn"":""t""}",,,target:adjacent
+bar_of_soap,4515,4516,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""less_than"":true}]",,null,"[{""type"":""bubble"",""count"":1}]",,
+bar_of_soap,4515,4517,"[{""a"":""times_coins_given"",""b"":{""$dyn"":""values[0] - 1""},""greater_than_eq"":true}]",destroyed,true,"[{""type"":""bubble"",""count"":1}]",,
+bar_of_soap,4515,4518,[],saved_achievement_value,1,,,
+anchor,4519,4520,"[{""a"":""grid_position_x"",""b"":0},{""a"":""grid_position_y"",""b"":0}]",value_bonus,"{""$self_index"":0}",,,
+anchor,4519,4521,"[{""a"":""grid_position_x"",""b"":0},{""a"":""grid_position_y"",""b"":{""$dyn"":""reels.reel_height - 1""}}]",value_bonus,"{""$self_index"":0}",,,
+anchor,4519,4522,"[{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}},{""a"":""grid_position_y"",""b"":0}]",value_bonus,"{""$self_index"":0}",,,
+anchor,4519,4523,"[{""a"":""grid_position_x"",""b"":{""$dyn"":""reels.reel_width - 1""}},{""a"":""grid_position_y"",""b"":{""$dyn"":""reels.reel_height - 1""}}]",value_bonus,"{""$self_index"":0}",,,
+hex_of_hoarding,4524,4531,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true},{""a"":null,""b"":false,""dynamic_a_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_a_key"":""hex_of_emptiness_trigger""}]",hex_of_hoarding_trigger,true,,,
+hex_of_midas,4532,4539,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""coin"",""count"":1}]",,when:no_item:holy_water;when:no_item:holy_water_essence
+cow,4540,4542,"[{""a"":""values"",""b"":{""$dyn"":""rand_range(0, 100)""},""value_num"":0,""rand"":true}]",,null,"[{""type"":""milk"",""count"":1}]",,
+frozen_fossil,4543,4549,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true,""dynamic_b_mod_target"":{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\""""},""dynamic_b_mod_key"":""fossil_diff"",""dynamic_b_mod_multiplier"":{""$dyn"":""-values[1]""}},{""a"":""tbd"",""b"":false}]",destroyed,true,,,
+frozen_fossil,4543,4552,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""frozen_fossil""}]",,null,"[{""type"":""eldritch_beast"",""count"":1}]",,
+eldritch_beast,4553,4555,"[{""a"":""groups"",""b"":""fossillikes""},{""a"":""destroyed"",""b"":false}]",destroyed,true,,,target:adjacent
+eldritch_beast,4553,4556,[],value_bonus,"{""$dyn"":""$\""/root/Main/Pop-up Sprite/Pop-up\"".fossil_diff * values[0]""}",,,overwrite
+robin_hood,4557,4565,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+robin_hood,4557,4566,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[1] - checkered_flag_diff""},""greater_than_eq"":true}]",times_displayed,0,,,overwrite
+robin_hood,4557,4568,"[{""a"":""groups"",""b"":""robinlikes""}]",value_bonus,"{""$self_index"":2}",,,target:adjacent
+robin_hood,4557,4569,"[{""a"":""groups"",""b"":""robinhates""}]",destroyed,true,,,target:adjacent
+robin_hood,4557,4570,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""robinhates""}]",value_bonus,"{""$self_index"":3}",,,target:self
+rabbit,4571,4572,"[{""a"":""times_displayed"",""b"":{""$self_index"":1}}]",permanent_bonus,"{""$self_index"":0}",,"[{""k"":""rabbit_hops"",""d"":3}]",
+rabbit,4571,4577,[],,null,"[{""type"":""rabbit_fluff"",""count"":1}]","[{""k"":""rabbit_fluff_shed"",""d"":{""$dyn"":""fluff_arr.size() * 0.01""}}]",when:item:shedding_season_essence;consumes:shedding_season_essence;spawnmul
+rabbit,4571,4578,[],,null,,"[{""k"":""rabbit_hops"",""d"":3}]",when:item:shedding_season_essence
+rabbit,4571,4581,"[{""a"":""type"",""b"":""turtle""}]",,null,,,when:item:turtle_and_rabbit_essence;target:adjacent;consumes:turtle_and_rabbit_essence
+present,4582,4588,"[{""a"":""times_displayed"",""b"":{""$dyn"":""values[0] - time_machine_diff""},""greater_than_eq"":true}]",destroyed,true,,,
+present,4582,4589,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""present""}]",value_bonus,"{""$self_index"":1}",,,
+watermelon,4590,4591,"[{""a"":""type"",""b"":""watermelon""},{""a"":{""counted_symbols"":""watermelon""},""b"":0,""greater_than"":true}]",value_bonus,"{""counted_symbols"":""watermelon""}",,,
+watermelon,4590,4593,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,when:no_item:fertilizer_essence
+flower,4594,4595,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
+essence_capsule,4596,4602,[],destroyed,true,,,
+essence_capsule,4596,4603,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""essence_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+dud,4604,4605,"[{""a"":""times_displayed"",""b"":{""$self_index"":0},""greater_than_eq"":true}]",destroyed,true,,,
+dog,4606,4613,"[{""a"":""type"",""b"":""dog"",""not_prev"":true}]",type,"""wolf""",,,when:item:quigley_the_wolf_essence
+comedian,4614,4616,"[{""a"":""groups"",""b"":""funny""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+comedian,4614,4618,"[{""a"":""groups"",""b"":""darkhumor""}]",value_multiplier,"{""$dyn"":""pow(items[item_types.find(\""dark_humor\"")].values[1], items[item_types.find(\""dark_humor\"")].item_count)""}",,,when:item:dark_humor;target:adjacent
+comedian,4614,4620,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""comedian""}]",,null,,,when:item:dark_humor_essence;consumes:dark_humor_essence
+light_bulb,4621,4623,"[{""a"":""groups"",""b"":""gem""}]",saved_value,1,,,target:self
+light_bulb,4621,4624,"[{""a"":""groups"",""b"":""gem""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
+light_bulb,4621,4625,"[{""a"":""saved_value"",""b"":{""$self_index"":1},""greater_than_eq"":true},{""a"":""indestructible"",""b"":false},{""a"":""tbd"",""b"":false}]",destroyed,true,,,
+time_capsule,4626,4628,[],destroyed,true,,,
+time_capsule,4626,4637,"[{""a"":""tbd"",""b"":true},{""a"":""type"",""b"":""time_capsule"",""not_prev"":true}]",,null,"[{""type"":""prev_destroyed_symbol"",""count"":{""$self_index"":0}}]",,spawnmul
+time_capsule,4626,4638,"[{""a"":""type"",""b"":""time_capsule""},{""a"":""destroyed"",""b"":true}]",,null,,,consumes:capsule_machine_essence
+peach,4639,4640,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""peach""}]",,null,"[{""type"":""seed"",""count"":1}]",,
+peach,4639,4641,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
+apple,4642,4643,"[{""a"":""type"",""b"":""seed""}]",grown_apples,1,,,
+apple,4642,4644,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
+strawberry,4645,4646,"[{""a"":""type"",""b"":{""$dyn"":""t""}},{""a"":{""counted_symbols"":{""$dyn"":""t""}},""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+strawberry,4645,4647,"[{""a"":""type"",""b"":""seed""}]",grown_strawberries,1,,,
+strawberry,4645,4648,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
+ruby|emerald,4649,4650,"[{""a"":""type"",""b"":{""$dyn"":""t""}},{""a"":{""counted_symbols"":{""$dyn"":""t""}},""b"":{""$self_index"":1},""greater_than_eq"":true}]",value_bonus,"{""$self_index"":0}",,,
+wine,4651,4652,"[{""a"":""times_displayed"",""b"":{""$self_index"":1}}]",permanent_bonus,"{""$self_index"":0}",,,
+wine,4651,4653,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""wine""}]",,null,,"[{""k"":""alcohol_consumed"",""d"":0.1906514}]",
+beer,4654,4655,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""beer""}]",,null,,"[{""k"":""alcohol_consumed"",""d"":0.1200954}]",
+goldfish,4656,4658,"[{""a"":""type"",""b"":""bubble""}]",destroyed,true,,,target:adjacent
+goldfish,4656,4659,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""type"",""b"":""bubble""}]",value_bonus,"{""$self_index"":0}",,,target:self
+gambler,4660,4661,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""gambler""}]",value_bonus,"{""$dyn"":""times_displayed * values[1]""}",,,
+dove,4662,4664,[],indestructible,true,,,target:adjacent
+sand_dollar,4665,4666,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""sand_dollar""}]",value_bonus,"{""$self_index"":0}",,,
+jellyfish,4667,4668,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""jellyfish""}]",value_bonus,"{""$self_index"":0}",,,
+pufferfish,4669,4670,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""pufferfish""}]",value_bonus,"{""$self_index"":0}",,,
+pufferfish,4669,4717,"[{""a"":""removed"",""b"":true,""not_prev"":true}]",type,"""empty""",,,

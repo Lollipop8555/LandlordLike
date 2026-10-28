@@ -374,10 +374,16 @@ const MECHANISMS: Mechanism[] = [
     note: '旋转为洗牌而非抽取；池内空位剔除至 ≤ 25。',
   },
   {
-    name: '开局每列一个基础符号，并按楼层注入 dud',
-    src: 'Reel__Reel.gd:277-298',
-    state: 'part',
-    note: '基础符号已还原；floor ≥ 5 / 7 的 dud 注入尚未接入。',
+    name: '开局每列一个基础符号；楼层 ≥10 / ≥14 / ≥19 按 25 / 20 / 15 转注入 dud',
+    src: 'Reel__Reel.gd:277-298 · Main__Reels.gd:272-282',
+    state: 'done',
+    note: '基础符号与 dud 注入均已实现；times_rent_paid ≥ 12 后停止注入。',
+  },
+  {
+    name: '楼层（current_floor）开局选定，一局内不变',
+    src: 'Main__Main.gd:1395 · Pop-up__Pop-up.gd:20',
+    state: 'done',
+    note: '1–20 层；影响租金加价门槛、房东 HP（750 / 1000 / 1500）、细则阈值、dud 间隔与同伴代币档位。',
   },
   {
     name: '初始 1 金币 / 首期租金 25 / 5 次旋转',

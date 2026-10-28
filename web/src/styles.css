@@ -47,19 +47,6 @@ body {
   padding-bottom: max(14px, env(safe-area-inset-bottom));
 }
 
-.corner-btn {
-  position: fixed; top: 14px; right: 14px; z-index: 20;
-  appearance: none; cursor: pointer; font-family: inherit;
-  width: 38px; height: 38px; padding: 0; border-radius: 50%;
-  display: grid; place-items: center;
-  font-size: 16px; line-height: 1; color: var(--muted);
-  background: rgba(18, 26, 42, 0.82); border: 1px solid var(--line);
-  backdrop-filter: blur(10px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  transition: color 0.15s, border-color 0.15s, transform 0.15s;
-}
-.corner-btn:hover { color: var(--gold); border-color: rgba(245, 196, 81, 0.55); transform: translateY(-1px); }
-.corner-btn:active { transform: scale(0.94); }
-
 /* ─────────── HUD ─────────── */
 
 .stage { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: clamp(6px, 1.5vh, 14px); }
@@ -169,6 +156,45 @@ body {
 .tile[data-action='inspect'] { cursor: pointer; }
 .tile[data-action='inspect']:hover { transform: translateY(-2px); }
 
+/* ── 拖拽重排 ──
+   棋盘本身不需要滚动（html/body 已锁死），把触摸手势全部收给指针事件，
+   否则移动端会被判成滚动，拖到一半就断 */
+.tile { touch-action: none; -webkit-tap-highlight-color: transparent; }
+.tile:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.tile[data-action='inspect'] { cursor: grab; }
+.tile[data-action='inspect']:active { cursor: grabbing; }
+.tile.dragging { opacity: 0.32; transform: none; }
+.tile.drag-hover {
+  outline: 2px dashed var(--gold); outline-offset: -3px;
+  background: linear-gradient(170deg, #1d2a42, #131b2b);
+}
+/* 键盘拾起：实线框 + 轻微抬起，和拖拽的虚线目标区分开 */
+.tile.holding {
+  outline: 2px solid var(--gold); outline-offset: -2px;
+  box-shadow: 0 0 0 3px rgba(245, 196, 81, 0.18), inset 0 0 18px rgba(245, 196, 81, 0.16);
+  transform: translateY(-3px);
+}
+.tile.just-moved { animation: swapPop 0.42s cubic-bezier(0.2, 1.4, 0.4, 1); }
+
+/* 拖动中的幽灵牌：跟着指针走，鼠标事件一律穿透 */
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 90;
+  pointer-events: none;
+  opacity: 0.95;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+  animation: ghostLift 0.12s ease-out;
+}
+
+@keyframes swapPop {
+  0% { transform: scale(0.84); }
+  55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes ghostLift {
+  0% { opacity: 0.5; }
+  100% { opacity: 0.95; }
+}
+
 @keyframes roll {
   0% { transform: translateY(-42%); opacity: 0.55; }
   100% { transform: translateY(42%); opacity: 0.55; }
@@ -186,6 +212,18 @@ body {
   text-shadow: 0 2px 6px #000; pointer-events: none;
   animation: floatUp 0.85s ease-out forwards;
 }
+/* 彩蛋：撸狗/逗兔时符号抖一下（点击一次触发） */
+.tile.petting .face {
+  animation: petWiggle 0.4s ease-out;
+}
+@keyframes petWiggle {
+  0% { transform: rotate(0) scale(1); }
+  25% { transform: rotate(-11deg) scale(1.12); }
+  55% { transform: rotate(9deg) scale(1.06); }
+  80% { transform: rotate(-4deg) scale(1.02); }
+  100% { transform: rotate(0) scale(1); }
+}
+
 @keyframes floatUp {
   0% { opacity: 0; transform: translate(-50%, -20%) scale(0.7); }
   25% { opacity: 1; transform: translate(-50%, -60%) scale(1.05); }
@@ -233,7 +271,11 @@ body {
 
 /* ─────────── 期数轨 ─────────── */
 
-.rent-track { flex: 0 0 auto; display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+.rent-track { flex: 0 0 auto; display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.rent-dots { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+/* 方块轨的文字替身：只有极小横屏才显示 */
+.rent-sum { display: none; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.rent-sum b { color: var(--gold); font-size: 12px; }
 .rent-dot {
   width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
   font-family: var(--mono); font-size: 10.5px; color: #4d5f7a;
@@ -281,6 +323,37 @@ body {
 @keyframes sheetIn {
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to { opacity: 1; transform: none; }
+}
+
+/* ── 首次引导 ──
+   盖住整盘的小卡片：三步、每步三条，按钮固定在最下面一排
+   （上一步只在第 2 步之后出现，宽度会让"下一步"吃掉剩余空间） */
+.tutorial-overlay { z-index: 34; }
+.tutorial-sheet { width: min(440px, 100%); }
+.tutorial-head { display: flex; gap: 12px; align-items: center; }
+.tutorial-icon {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 13px;
+  display: grid; place-items: center; font-size: 24px;
+  background: linear-gradient(160deg, #1e2a42, #131b2a);
+  border: 1px solid var(--line);
+}
+.tutorial-head h2 { margin: 2px 0 0; font-size: 18px; letter-spacing: 0.02em; }
+.tutorial-head .muted { margin: 0; }
+.tutorial-lead { margin: 14px 0 10px; font-size: 13.5px; color: var(--text); line-height: 1.6; }
+.tutorial-list { margin: 0; padding-left: 18px; display: grid; gap: 7px; }
+.tutorial-list li { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.tutorial-list li::marker { color: var(--gold); }
+.tutorial-dots { display: flex; gap: 6px; justify-content: center; margin: 18px 0 12px; }
+.tutorial-dots i {
+  width: 22px; height: 4px; border-radius: 99px;
+  background: #24304a; transition: background 0.2s, width 0.2s;
+}
+.tutorial-dots i.on { background: var(--gold); width: 30px; }
+.tutorial-foot { display: flex; gap: 8px; align-items: stretch; }
+.tutorial-foot .ghost-btn { flex: 0 0 auto; width: auto; padding: 13px 16px; font-size: 12.5px; border-radius: 14px; }
+.tutorial-foot .big-btn {
+  flex: 1 1 auto; min-width: 0; width: auto;
+  padding: 13px 0; font-size: 13px; letter-spacing: 0.06em; border-radius: 14px;
 }
 
 .sheet-head h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: 0.02em; }
@@ -347,21 +420,42 @@ body {
 }
 .offer-val small { font-size: 9px; font-weight: 400; color: var(--muted); letter-spacing: 0.1em; margin-right: 3px; }
 
-/* 定义入口：一枚挂在卡角的小徽标，不占版面 */
+/* 定义入口：一枚挂在卡角的小徽标，不占版面。
+   按钮本体是一块贴在右上角的 44×44 透明热区（手指够得着），
+   里面那枚 19px 的小圆点只负责好看 */
 .offer-peek {
-  appearance: none; cursor: pointer; font-family: var(--mono);
-  position: absolute; top: 7px; right: 7px; z-index: 2;
-  width: 19px; height: 19px; padding: 0; border-radius: 50%;
+  appearance: none; cursor: pointer; font-family: inherit;
+  position: absolute; top: 0; right: 0; z-index: 2;
+  width: 44px; height: 44px; padding: 0; border: 0; background: none;
+  display: block;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.offer-peek-dot {
+  position: absolute; top: 7px; right: 7px;
+  width: 19px; height: 19px; border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 11px; line-height: 1;
+  font-family: var(--mono); font-size: 11px; line-height: 1;
   background: rgba(10, 16, 26, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(200, 215, 235, 0.6);
-  opacity: 0.6;
-  transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s;
+  color: rgba(200, 215, 235, 0.75);
+  opacity: 0.85;
+  transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s, transform 0.12s;
 }
-.offer:hover .offer-peek { opacity: 1; }
-.offer-peek:hover { color: #0b1220; background: var(--gold); border-color: var(--gold); }
+.offer:hover .offer-peek-dot { opacity: 1; }
+.offer-peek:hover .offer-peek-dot,
+.offer-peek:active .offer-peek-dot {
+  color: #0b1220; background: var(--gold); border-color: var(--gold);
+  opacity: 1; transform: scale(1.12);
+}
+.offer-peek:focus-visible { outline: none; }
+.offer-peek:focus-visible .offer-peek-dot {
+  outline: 2px solid var(--gold); outline-offset: 2px; opacity: 1;
+}
+/* 触屏没有 hover，徽标不能靠悬停才亮起来 */
+@media (pointer: coarse) {
+  .offer-peek-dot { opacity: 1; }
+}
 
 /* 定义面板浮在商店之上 */
 .peek-overlay { z-index: 40; }
@@ -372,6 +466,50 @@ body {
   background: transparent; border: 1px solid var(--line); color: var(--muted);
 }
 .ghost-btn:hover { color: var(--text); border-color: #35456a; }
+.reset-profile { margin-top: 14px; }
+.wipe-run { margin-top: 16px; }
+
+/* ── 设置面板 ── */
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.setting-row:last-of-type { border-bottom: 0; }
+.setting-row b { display: block; font-size: 13.5px; font-weight: 600; }
+.setting-row small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.toggle {
+  appearance: none; cursor: pointer; flex: 0 0 auto;
+  width: 46px; height: 26px; padding: 0; border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line);
+  position: relative; transition: background 0.18s, border-color 0.18s;
+}
+.toggle .knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #8ea3c4; transition: transform 0.18s, background 0.18s;
+}
+.toggle.on { background: rgba(245, 196, 81, 0.28); border-color: rgba(245, 196, 81, 0.6); }
+.toggle.on .knob { transform: translateX(20px); background: var(--gold); }
+.toggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* 减弱动效：一次性把全局动画/过渡压到几乎瞬时，
+   逐条的时长都写死在各自规则里，只有这里能一网打尽 */
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+/* 系统级偏好同样生效，不依赖玩家去设置里找开关 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
 
 .icon-btn {
   appearance: none; cursor: pointer; width: 34px; height: 34px; border-radius: 10px;
@@ -439,8 +577,11 @@ body {
 
 .title-screen {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: clamp(14px, 3vh, 26px); padding: 12px 4px 20px; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  /* 放得下时整体居中；放不下时从顶部开始，保证滚到顶部能看到品牌区 */
+  justify-content: flex-start;
+  justify-content: safe center;
+  gap: clamp(10px, 2.2vh, 22px); padding: 8px 4px 12px; text-align: center;
 }
 .brand-block { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .brand-mark { font-size: clamp(38px, 9vh, 62px); filter: drop-shadow(0 8px 18px rgba(245, 196, 81, 0.35)); }
@@ -466,10 +607,61 @@ body {
 .mode-text { display: flex; flex-direction: column; gap: 2px; }
 .mode-text b { font-size: 14px; }
 .mode-text small { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
-.title-actions { display: flex; flex-wrap: wrap; gap: 10px; row-gap: 16px; justify-content: center; width: min(420px, 92%); }
-.title-actions .ghost-btn { width: auto; flex: 1 1 40%; }
-.big-btn.start { flex: 1 1 100%; min-width: 0; margin-bottom: 8px; }
-.title-stats { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; font-size: 11.5px; color: var(--muted); }
+/* 楼层选择：窄屏纵向排列，宽屏（≥620px）楼层网格与参数表并排，省一屏高度 */
+.floor-pick {
+  width: min(420px, 92%); display: grid; gap: 6px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'head' 'row' 'data';
+  align-items: start;
+}
+.floor-pick-head {
+  grid-area: head; display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 11.5px; color: var(--muted);
+}
+.floor-pick-head b { color: var(--text); font-family: var(--mono); font-size: 12.5px; }
+.floor-row { grid-area: row; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.floor-chip {
+  appearance: none; cursor: pointer; width: 100%; min-width: 0; height: 26px; padding: 0;
+  font-family: var(--mono); font-size: 11.5px; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.floor-chip:hover { color: var(--text); border-color: #35456a; }
+.floor-chip.picked {
+  color: #10151f; border-color: rgba(245, 196, 81, 0.8);
+  background: linear-gradient(160deg, #f5c451, #e0a93a); font-weight: 700;
+}
+/* 未通关的层：虚线框 + 锁，明确"还没到"而不是"点不动" */
+.floor-chip.locked {
+  cursor: not-allowed; color: rgba(200, 215, 235, 0.26);
+  border-style: dashed; border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.015); font-size: 10px;
+}
+.floor-chip.locked:hover { color: rgba(200, 215, 235, 0.38); border-color: rgba(255, 255, 255, 0.16); }
+/* 参数表：窄屏 2×2 网格（省一半纵向空间），宽屏并排时回到单列 4 行 */
+.floor-pick .floor-data {
+  grid-area: data; width: 100%; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 10px; align-content: start;
+}
+.floor-pick .floor-data tbody { display: contents; }
+.floor-pick .floor-data tr {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 4px 0; border-bottom: 1px solid rgba(36, 48, 74, 0.55);
+}
+.floor-pick .floor-data td { padding: 0; border: 0; font-size: 11.5px; line-height: 1.3; white-space: nowrap; }
+.floor-pick .floor-data td:first-child { color: var(--muted); }
+.floor-pick .floor-data td.num { font-family: var(--mono); color: var(--text); }
+@media (min-width: 620px) {
+  .floor-pick { grid-template-columns: minmax(0, 1fr) 132px; grid-template-areas: 'head head' 'row data'; }
+  /* 并排后横向空间变小，楼层改为 5 列 × 4 行，保持点击面积 */
+  .floor-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .floor-pick .floor-data { grid-template-columns: minmax(0, 1fr); }
+  .floor-pick .floor-data tr:last-child { border-bottom: 0; }
+}
+.title-actions { display: flex; flex-wrap: wrap; gap: 8px; row-gap: 10px; justify-content: center; width: min(420px, 92%); }
+.title-actions .ghost-btn { width: auto; flex: 1 1 30%; }
+.big-btn.start { flex: 1 1 100%; min-width: 0; margin-bottom: 4px; }
+.title-stats { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 11.5px; color: var(--muted); }
 .title-stats b { color: var(--text); font-family: var(--mono); }
 
 /* ─────────── 成就 / 统计 ─────────── */
@@ -540,26 +732,21 @@ body {
 .decl-head b { color: var(--gold); font-family: var(--mono); }
 .decl { padding: 7px 0; border-bottom: 1px solid rgba(36, 48, 74, 0.6); }
 .decl:last-child { border-bottom: 0; padding-bottom: 0; }
+/* 行为未还原的提示条：和图鉴里的"无特效"区分开，别让玩家以为是设计如此 */
+.decl-warn {
+  margin: 0 0 6px; padding: 6px 9px; border-radius: 8px;
+  font-size: 11.5px; line-height: 1.5;
+  color: #f3c98b; background: rgba(243, 201, 139, 0.1);
+  border: 1px solid rgba(243, 201, 139, 0.28);
+}
 .decl-cond { font-family: var(--mono); font-size: 11.5px; color: #c3d0e4; line-height: 1.6; word-break: break-word; }
 .decl-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 10.5px; }
 
-/* ─────────── 分析抽屉 ─────────── */
+/* ─────────── 弹窗头部（成就 / 统计 / 信纸共用） ─────────── */
 
 .analysis-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .analysis-head h2 { margin: 0 0 3px; font-size: 17px; letter-spacing: 0.02em; }
 
-.analysis-tabs { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.a-tab {
-  appearance: none; cursor: pointer; font-family: inherit; font-size: 13px;
-  padding: 7px 14px; border-radius: 9px; border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.03); color: var(--muted);
-}
-.a-tab[aria-selected='true'] { color: #241a02; background: linear-gradient(160deg, #ffe08a, var(--gold)); font-weight: 700; }
-.a-tab:hover:not([aria-selected='true']) { color: var(--text); }
-
-.analysis-body { display: flex; flex-direction: column; gap: 14px; }
-
-/* ─────────── 分析内容通用 ─────────── */
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
 .panel h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -638,14 +825,11 @@ table.data tr:last-child td { border-bottom: 0; }
   .sheet { padding: 18px; border-radius: 18px; }
   .overlay { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .formula { grid-template-columns: 1fr; }
-  .analysis-tabs { margin: 14px 0; }
-  .a-tab { padding: 6px 11px; font-size: 12.5px; }
 }
 
 /* 手机竖屏 */
 @media (max-width: 560px) {
   .app { padding: 14px 12px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-  .corner-btn { top: 10px; right: 10px; width: 34px; height: 34px; font-size: 15px; }
   .stage { gap: 11px; }
   .hud { flex-direction: column; gap: 10px; }
   .coin-box { justify-content: center; }
@@ -656,7 +840,8 @@ table.data tr:last-child td { border-bottom: 0; }
   .offer-face { font-size: 26px; }
   .offer-name { font-size: 10.5px; }
   .offer-val { font-size: 13px; }
-  .offer-peek { width: 17px; height: 17px; font-size: 10px; top: 6px; right: 6px; }
+  .offer-peek { width: 40px; height: 40px; }
+  .offer-peek-dot { width: 17px; height: 17px; font-size: 10px; top: 6px; right: 6px; }
   .tile { border-radius: 10px; }
   .rent-dot { width: 21px; height: 21px; font-size: 9.5px; }
   .compare { grid-template-columns: 1fr; }
@@ -669,7 +854,6 @@ table.data tr:last-child td { border-bottom: 0; }
 /* 超窄（iPhone SE / 折叠屏外屏） */
 @media (max-width: 380px) {
   .app { padding: 12px 9px 8px; }
-  .corner-btn { width: 32px; height: 32px; font-size: 14px; }
   .coin-num { font-size: 24px; }
   .chip { font-size: 10.5px; padding: 3px 8px; }
   .offers { gap: 5px; }
@@ -679,9 +863,54 @@ table.data tr:last-child td { border-bottom: 0; }
   .offer-face { font-size: 22px; }
   .offer-name { font-size: 9.5px; }
   .offer-val { font-size: 12px; }
-  .offer-peek { width: 15px; height: 15px; font-size: 9px; top: 5px; right: 5px; }
+  .offer-peek { width: 40px; height: 40px; }
+  .offer-peek-dot { width: 16px; height: 16px; font-size: 9.5px; top: 5px; right: 5px; }
   .sheet { padding: 14px; border-radius: 16px; }
   .overlay { padding: 8px; }
+}
+
+/* 矮窗口的标题页：压缩纵向占用，保持一屏（320×568 至 1280×720 均不滚动） */
+@media (max-height: 760px) {
+  .title-screen { gap: 10px; padding: 4px 4px 8px; }
+  .brand-block { gap: 4px; }
+  .brand-mark { font-size: clamp(28px, 6vh, 42px); }
+  .brand { font-size: clamp(19px, min(9.6vw, 5.6vh), 40px); }
+  .mode-list { gap: 6px; }
+  .mode-card { padding: 8px 12px; gap: 10px; border-radius: 12px; }
+  .mode-icon { font-size: 19px; }
+  .mode-text b { font-size: 13.5px; }
+  .mode-text small { font-size: 11px; line-height: 1.3; }
+  .floor-chip { height: 24px; }
+  .floor-pick .floor-data tr { padding: 3px 0; }
+  .title-actions { row-gap: 8px; }
+  .title-stats { gap: 10px; font-size: 11px; }
+}
+
+/* 更矮的竖屏（320×568 一类）：再收一档，仍保持全部内容可见 */
+@media (max-height: 680px) and (orientation: portrait) {
+  .title-screen { gap: 8px; padding: 2px 4px 4px; }
+  .mode-card { padding: 7px 11px; }
+  .title-stats { gap: 8px; }
+}
+
+/* 横屏矮窗（手机横放、半屏 PC 窗口）：标题页分两栏，左品牌+模式，右楼层+按钮 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .title-screen {
+    display: grid; align-content: center; justify-items: center;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: 'brand floor' 'modes acts' 'modes stats';
+    gap: 6px 20px; padding: 4px 6px;
+  }
+  .brand-block { grid-area: brand; }
+  .brand-mark { font-size: 32px; }
+  .mode-list { grid-area: modes; width: 100%; align-self: center; }
+  .mode-card { padding: 6px 11px; gap: 9px; }
+  .mode-icon { font-size: 17px; }
+  .mode-text b { font-size: 13px; }
+  .mode-text small { font-size: 10.5px; line-height: 1.25; }
+  .floor-pick { grid-area: floor; width: 100%; }
+  .title-actions { grid-area: acts; width: 100%; }
+  .title-stats { grid-area: stats; }
 }
 
 /* 矮窗口：横屏手机、半屏 PC 窗口 */
@@ -699,6 +928,134 @@ table.data tr:last-child td { border-bottom: 0; }
   .coin-icon { font-size: 20px; }
   .coin-num { font-size: 21px; }
   .rent-dot { width: 20px; height: 20px; font-size: 9px; }
+}
+
+/* 极小横屏（手机横放，高 ≤500）：持有块/房东块/状态区合流成一条文字带，
+   期数轨由 12 个方块换成一行文字，把省下的高度还给棋盘。
+   两块卡片的 padding、底色、描边都撤掉，横向不再挤占状态区。 */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* 横屏一律按行流排，压过 (max-width: 560px) 的竖排规则 */
+  .hud { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 3px 12px; }
+
+  .coin-box {
+    display: flex; align-items: baseline; gap: 5px;
+    padding: 0; border: 0; border-radius: 0; background: none;
+  }
+  .coin-icon { font-size: 14px; filter: none; }
+  .coin-num { font-size: 17px; }
+  .coin-sub { font-size: 10px; }
+
+  .landlord { padding: 0; border: 0; border-radius: 0; background: none; gap: 5px; }
+  .landlord-face { font-size: 15px; }
+  .landlord-body { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+  .landlord-name { font-size: 10px; letter-spacing: 0.04em; }
+  .hp-bar { flex: 0 0 auto; width: 44px; height: 4px; }
+  .hp-bar.boss { width: 60px; height: 5px; }
+  .landlord-hp { font-size: 10px; }
+
+  /* 状态区的两行 chip 拆成独立项，与上面两块共用同一个换行流，不再各占一整行 */
+  .hud-right, .hud-row { display: contents; }
+  .chip, .token-chip { font-size: 10.5px; padding: 0; }
+  .chip-btn { padding: 1px 7px; }
+  .hud-hint { font-size: 10px; }
+  /* 期数已由底部文字进度表示，这里不再重复 */
+  .chip-period { display: none; }
+
+  .rent-dots { display: none; }
+  .rent-sum { display: inline; }
+}
+
+/* 极矮横屏（≤340，如 568×320）：状态带无论如何压不到两行，舍掉模式与池子两枚标签
+   （模式看期数写法即可分辨，池子数在牌库里），其余留白收到最小 */
+@media (orientation: landscape) and (max-height: 340px) {
+  .stage { gap: 6px; }
+  .hud { gap: 2px 10px; }
+  .chip-mode, .chip-pool { display: none; }
+  .big-btn { padding: 7px 18px; font-size: 14px; }
+  .bag { padding: 4px 8px; }
+}
+
+/* 极小横屏（高 ≤500）：弹层跟着瘦身。这些对话框原本按桌面尺寸排版，
+   390 高时连商店、格子详情都要滚一屏才看得完；这里压字号与留白，
+   并把列表弹窗的内层滚动去掉，只留弹层这一层滚动 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .overlay { align-items: center; padding: 8px; }
+  .sheet {
+    width: min(720px, 100%);
+    max-height: calc(100dvh - 16px);
+    padding: 13px 16px; border-radius: 16px;
+  }
+  .sheet.wide { width: min(880px, 100%); }
+  .sheet.detail { width: min(640px, 100%); }
+  .confirm-sheet { width: min(340px, 100%); padding: 16px; }
+
+  .analysis-head h2, .sheet-head h2 { font-size: 15px; }
+  .sheet .muted.small { font-size: 10.5px; line-height: 1.45; }
+  .icon-btn { width: 26px; height: 26px; border-radius: 8px; font-size: 12px; }
+
+  /* 商店：三张卡压扁，两个按钮改并排 */
+  .offers { gap: 8px; margin: 10px 0; }
+  .offer-main { padding: 8px 8px 7px; gap: 0; }
+  .offer-rare { font-size: 8px; margin-bottom: 2px; }
+  .offer-art { width: 34px; height: 34px; }
+  .offer-face { font-size: 20px; }
+  .offer-name { font-size: 10.5px; margin-top: 3px; }
+  .offer-val { font-size: 12.5px; margin-top: 3px; }
+  .offer-peek { width: 44px; height: 44px; }
+  .offer-peek-dot { width: 18px; height: 18px; font-size: 10px; top: 4px; right: 4px; }
+  .shop-foot { flex-direction: row; gap: 8px; }
+  .shop-foot .ghost-btn { padding: 9px 12px; }
+
+  /* 格子详情 / 定义 / 统计共用的小表格 */
+  .detail-hero { gap: 10px; margin-bottom: 8px; }
+  .detail-face { font-size: 28px; }
+  .detail-hero h2 { font-size: 15px; }
+  .detail-total { font-size: 22px; }
+  table.data { font-size: 11.5px; }
+  table.data td { padding: 3px 8px; }
+  .decls { margin-top: 8px; padding: 8px 10px; border-radius: 10px; }
+  .decl-head { font-size: 10px; margin-bottom: 6px; }
+  .decl { padding: 4px 0; }
+  .decl-cond { font-size: 10.5px; line-height: 1.5; }
+  .decl-meta { margin-top: 3px; font-size: 10px; }
+
+  /* 列表类弹窗：去掉内层滚动，只让弹层自己滚 */
+  .deck-list, .fp-list, .mail-list { max-height: none; overflow: visible; margin: 8px 0; }
+  .deck-row { padding: 5px 9px; }
+  .fp-meter { margin: 6px 0 8px; }
+  .fp-card { padding: 8px 10px; }
+  .fp-lines { margin-top: 4px; }
+  .fp-lines li { font-size: 11.5px; }
+  .mail-body { padding-bottom: 8px; }
+  .mail-body p { font-size: 12px; margin-bottom: 6px; }
+  .ach-progress { margin: 6px 0 8px; }
+  .ach-grid { gap: 6px; }
+  .ach { padding: 7px 9px; }
+  .ach-text b { font-size: 11.5px; }
+  .ach-text small { font-size: 10px; line-height: 1.35; }
+}
+
+/* 极矮横屏（≤340，如 568×320）：弹层再收一档，让商店、详情、统计也能一屏看完 */
+@media (orientation: landscape) and (max-height: 340px) {
+  .overlay { padding: 6px; }
+  .sheet { padding: 8px 10px; border-radius: 12px; max-height: calc(100dvh - 12px); }
+  .sheet.detail { width: min(700px, 100%); }
+  .analysis-head h2, .sheet-head h2 { font-size: 14px; }
+  .detail-hero { gap: 8px; margin-bottom: 4px; }
+  .detail-face { font-size: 22px; }
+  .detail-total { font-size: 19px; }
+  table.data { font-size: 11px; }
+  table.data td { padding: 1px 7px; }
+  .decls { margin-top: 4px; padding: 6px 8px; }
+  .decl-head { margin-bottom: 4px; }
+  .decl { padding: 3px 0; }
+  .decl-cond { font-size: 10px; line-height: 1.45; }
+  .offers { gap: 6px; margin: 8px 0; }
+  .offer-main { padding: 7px 6px 6px; }
+  .offer-name { font-size: 10px; }
+  .shop-foot .ghost-btn { padding: 7px 10px; }
+  .ghost-btn { padding: 8px; }
+  .reset-profile { margin-top: 6px; }
 }
 
 /* 大屏：给棋盘与弹层更多呼吸空间 */
@@ -768,6 +1125,32 @@ button.token-chip.spent { border-color: var(--line); border-style: dashed; backg
 .deck-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .deck-rare { font-size: 10px; color: var(--muted); }
 .deck-count { font-family: var(--mono); color: var(--text); }
+
+/* ─────────── 细则面板 ─────────── */
+
+.chip-btn.fineprint-on { border-color: rgba(170, 130, 255, 0.55); color: #c9b3ff; }
+.fp-meter {
+  display: flex; flex-direction: column; gap: 5px; margin: 10px 0 12px;
+  font-size: 11.5px; color: var(--muted);
+}
+.fp-meter-bar {
+  height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden;
+}
+.fp-meter-bar i {
+  display: block; height: 100%; background: linear-gradient(90deg, #8f6bff, #c9b3ff);
+  transition: width 0.3s ease;
+}
+.fp-list { max-height: 52vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.fp-card {
+  border: 1px solid #2a2350; border-radius: 12px; padding: 10px 12px;
+  background: rgba(26, 22, 48, 0.7);
+}
+.fp-card .fp-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fp-num { font-family: var(--mono); font-size: 11px; color: #c9b3ff; }
+.fp-diff, .fp-vals { font-size: 10px; color: var(--muted); }
+.fp-icon { margin-left: auto; font-size: 16px; }
+.fp-lines { margin: 7px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.fp-lines li { font-size: 12px; line-height: 1.45; color: var(--text); }
 
 /* ─────────── 房东信箱 ─────────── */
 
