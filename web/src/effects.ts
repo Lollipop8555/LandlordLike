@@ -154,6 +154,13 @@ export interface EvalCtx {
   /** 本格的网格坐标，供 grid_position_x / grid_position_y 使用 */
   position?: { x: number; y: number };
   /**
+   * `grid_position_x` 的**比较目标**（不是本格坐标）：源码里写成
+   * `{"a":"grid_position_x","b":{"$dyn":"$\"/root/Main/Pop-up...\".respun_reel"}}`，
+   * 语义是「本格所在列 == 本转被重摇的那一列」。这里给出那一列的值，
+   * 比较时由 `matchOne` 与 `ctx.position.x` 对照。
+   */
+  respunReel?: number;
+  /**
    * 发出这条声明的格子。源码里销毁会给受害者记一条 destroyed_or_removed_by
    * （Slot_Icon__Slot_Icon.gd 的 giver 分支），成就「猫喝到牛奶」「熊吃掉蜂蜜」靠它判定。
    */
@@ -672,6 +679,11 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
     case 'adjacent_empty':
       return Boolean(b) === false;
     case 'grid_position_x':
+      // b 可能是字面量（细则 33 的「第 N 列」）或 `$dyn` 的 respun_reel；
+      // 后者的字面值不来自 evalValue，而是 ctx.respunReel（-1 表示本转没重摇过）。
+      if (raw.dynamic_b_key === 'respun_reel' || String(comp.b).includes('respun_reel')) {
+        return (ctx.position?.x ?? -1) === (ctx.respunReel ?? -1) && (ctx.respunReel ?? -1) >= 0;
+      }
       return (ctx.position?.x ?? 0) === Number(b);
     case 'grid_position_y':
       return (ctx.position?.y ?? 0) === Number(b);
@@ -689,6 +701,19 @@ function matchOne(comp: EffectComparison, other: Cell, self: Cell, ctx: EvalCtx 
     default:
       return false;
   }
+}
+
+/**
+ * 声明里 `currency` 指定的槽位组（Slot_Icon__Slot_Icon.gd:2077-2100）。
+ * 返回值是三种代币之一，或 null 表示金币。
+ */
+type Currency = 'reroll_token' | 'removal_token' | 'essence_token' | null;
+
+function currencyOf(rule: EffectRule): Currency {
+  const flag = rule.flags.find((f) => f.startsWith('currency:'));
+  if (!flag) return null;
+  const v = flag.slice('currency:'.length);
+  return v === 'reroll_token' || v === 'removal_token' || v === 'essence_token' ? v : null;
 }
 
 /** bonus_value_num：本条声明写进 value_bonus_arr / value_multiplier_arr 的哪个下标 */
@@ -714,12 +739,25 @@ function applyTo(cell: Cell, rule: EffectRule, diff: number | string | boolean, 
       if (rule.flags.includes('overwrite')) cell.valueBonus = num;
       else cell.valueBonus += num;
       return;
-    case 'value_bonus':
-      cell.valueBonus += num;
+    case 'value_bonus': {
+      // currency：产出记进哪一套槽位（Slot_Icon__Slot_Icon.gd:2081-2096）
+      //   reroll_token / removal_token / essence_token → 对应代币
+      //   缺省 → 金币（valueBonus）
+      const cur = currencyOf(rule);
+      if (cur === 'reroll_token') cell.rerollValue = (cell.rerollValue ?? 0) + num;
+      else if (cur === 'removal_token') cell.removalValue = (cell.removalValue ?? 0) + num;
+      else if (cur === 'essence_token') cell.essenceValue = (cell.essenceValue ?? 0) + num;
+      else cell.valueBonus += num;
       return;
-    case 'value_multiplier':
-      cell.valueMultiplier *= num || 1;
+    }
+    case 'value_multiplier': {
+      const cur = currencyOf(rule);
+      if (cur === 'reroll_token') cell.rerollMultiplier = (cell.rerollMultiplier ?? 1) * (num || 1);
+      else if (cur === 'removal_token') cell.removalMultiplier = (cell.removalMultiplier ?? 1) * (num || 1);
+      else if (cur === 'essence_token') cell.essenceMultiplier = (cell.essenceMultiplier ?? 1) * (num || 1);
+      else cell.valueMultiplier *= num || 1;
       return;
+    }
     case 'permanent_bonus':
     case 'permanent_bonuses':
       cell.permanentBonus += num;
@@ -1430,6 +1468,12 @@ export interface ItemHolder {
   value?: number;
   /** saved_value：跨轮累计（莫比乌斯环记「已经补回几次」，达到上限就停手） */
   savedValue?: number;
+  /**
+   * 玩家手动关闭（`Item__Item.gd:32` 的 `disabled`）。
+   * 原版 `add_conditional_effects()` 的第一行就是 `if not disabled`
+   * （`:1851`），所以被禁用的道具**一条声明都不跑**。
+   */
+  disabled?: boolean;
 }
 
 const MULTIPLY_VTC = new Set(['value_multiplier', 'permanent_multiplier']);
@@ -1474,6 +1518,8 @@ export function applyItemEffects(
 
   for (const held of items) {
     if (!held.def || held.count <= 0) continue;
+    // 被玩家禁用的道具整段跳过（Item__Item.gd:1851 `if not disabled`）
+    if (held.disabled) continue;
     // item_count 读叠层数（祭坛每层产一个灵魂）；saved_value 是跨轮累计（莫比乌斯环）
     const holder = { def: held.def, itemCount: held.count, savedValue: held.savedValue ?? 0 } as Cell;
     for (const rule of EFFECTS_BY_SYMBOL.get(held.def.id) ?? []) {
@@ -1995,11 +2041,52 @@ function countedBonusOwner(rule: EffectRule): string | null {
   return typeof k === 'string' ? k : null;
 }
 
+/**
+ * `raritymod` 声明的倍率文本。
+ *
+ * 这类声明是**权重乘法**（`Pop-up.rarity_bonuses[档位] *= diff`），
+ * 所以要用乘法口径说「×1.3」，而不是加法口径的「+1.3」。
+ * `dynText` 的默认措辞是给数值加成的，直接套会得到「每持有一个招财猫 +1.3」。
+ */
+function rarityRateOf(rule: EffectRule, owner?: Owner): string {
+  const raw = rule.diff as unknown;
+  const expr =
+    raw && typeof raw === 'object' && '$dyn' in (raw as object)
+      ? String((raw as { $dyn: unknown }).$dyn)
+      : null;
+  if (!expr) return fmtValue(rule.diff, owner);
+
+  // `X.values[i] * 某道具.item_count`：倍率随持有数复利，写成「×1.3（每个招财猫）」
+  const perItem = expr.match(
+    /^(?:([a-z0-9_]+)\.values\[(\d+)\]|values\[(\d+)\]) \* (?:items\[item_types\.find\("([a-z0-9_]+)"\)\]\.item_count|([a-z0-9_]+)\.item_count)$/,
+  );
+  if (perItem) {
+    const base = perItem[1]
+      ? (SYMBOL_BY_ID.get(perItem[1])?.values[Number(perItem[2])] ?? null)
+      : ownerNum(owner, Number(perItem[3]));
+    const item = perItem[4] ?? perItem[5] ?? '';
+    if (base !== null) return `${numText(base)}（每个${symbolName(item)}）`;
+    return `每个${symbolName(item)}再乘一次`;
+  }
+  return dynText(expr, owner);
+}
+
 /** 效果本身，返回「值型」或「动作型」两种句块 */
 function effectText(rule: EffectRule, owner?: Owner): string {
   const vtc = rule.vtc;
-  // 稀有度上调本身没有数值，写成句子而不是留空：幸运猫这类道具全靠它起作用
-  if (RARITY_KEYS.has(vtc)) return `稀有度提到「${RARITY_LABEL[vtc as Rarity] ?? vtc}」`;
+  // 稀有度上调本身没有数值，写成句子而不是留空。
+  //
+  // `raritymod` 是**权重乘法**（Pop-up.rarity_bonuses[档位] *= diff），
+  // 不是「把这个符号的稀有度改成某档」。所以必须把倍率说出来，
+  // 否则三条声明会被读成三个互相冲突的要求（幸运猫就是典型）。
+  if (RARITY_KEYS.has(vtc)) {
+    if (rule.flags.includes('raritymod')) {
+      // 只输出倍率本身；「谁的出现权重」由 describeRuleBody 统一拼，
+      // 因为那里才知道主语是「自己」还是「相邻符号」。
+      return rarityRateOf(rule, owner);
+    }
+    return `稀有度提到「${RARITY_LABEL[vtc as Rarity] ?? vtc}」`;
+  }
   if (vtc === 'type') {
     if (typeof rule.diff === 'string') return `变成${symbolName(rule.diff)}`;
     // diff 为空时靠 flags 从某个组里按稀有度随机挑（种子长成植物的写法）
@@ -2295,6 +2382,18 @@ function describeRuleBody(rule: EffectRule, owner?: Owner): string {
   if (!eff) return '';
   const adjacent = rule.flags.includes('target:adjacent');
   const c = readCond(rule, owner, adjacent);
+
+  // `raritymod`：改的是「该档稀有度的出现权重」，主语既不是「自己」也不是
+  // 「相邻符号」，走通用的 verb/值型分支会得到「自己罕见 的出现权重 ×1.3」
+  // 这种读不通的句子，所以单独成句。
+  if (rule.flags.includes('raritymod')) {
+    // 门控由外层 `describeRule` 统一拼（它会处理「两层都有条件」的合句），
+    // 这里只给效果本身，否则会渲染成「持有招财猫，持有招财猫时，…」。
+    const tier = RARITY_LABEL[rule.vtc as Rarity] ?? rule.vtc;
+    const target = adjacent ? `相邻符号中${tier}` : tier;
+    return `${target}的出现权重 ×${eff}`;
+  }
+
   const isVerb = VERB_VTC.has(rule.vtc) || RARITY_KEYS.has(rule.vtc);
 
   // 邻居的称呼：显式类型 > 分组 > 泛称

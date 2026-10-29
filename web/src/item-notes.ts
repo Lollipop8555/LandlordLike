@@ -35,7 +35,7 @@ type Builder = (v: number[]) => ItemDesc;
 
 /** 自身价值类道具的统一提示（渲染层用） */
 export const SELF_VALUE_NOTE =
-  '本实现中「道具自身价值」只显示在道具面板上，不参与棋盘产出，所以这条规则没有实际收益。';
+  '道具自身价值只体现在道具面板上，不参与棋盘每转产出。';
 
 /** values[i] 的字面量；缺值时给 fallback，避免文案里出现 undefined */
 function n(v: number[], i: number, fallback = 0): string {
@@ -555,7 +555,7 @@ const DESC: Record<string, Builder> = {
     lines: [
       { when: EACH_SPIN, effect: `累积 +1；累积达到 ${n(v, 0)} 时清零，重新计数` },
     ],
-    gap: `第 2 个数值 ${n(v, 1)} 在本实现中没有对应规则。`,
+    gap: `第 2 个数值 ${n(v, 1)} 在原版数据表中未被任何规则引用，这里同样不参与结算。`,
   }),
   shattered_mirror: (v) => ({
     summary: '累积达到阈值后提高自身价值',
@@ -595,31 +595,40 @@ const DESC: Record<string, Builder> = {
     lines: [
       { when: '本转这一列被重摇过时', effect: `该列上每个符号的本轮倍率 ×${n(v, 1)}${STACK_POW}` },
     ],
-    gap: `「每转累积 +1」这条规则在本实现中只作记录，第 1 个数值 ${n(v, 0)} 没有对应规则。`,
+    gap: `第 1 个数值 ${n(v, 0)} 在原版中只用于界面显示累积次数，不参与产出结算。`,
   }),
-  telescope: () => ({
+  // telescope / protractor 的邻接扩展依赖原版的「clump 分组层」：
+  // `Main__Reels.gd:1583-1630` 先把所有同类符号归组（`add_to_clump`），
+  // 组内成员互视为相邻；telescope 让全场参与分组，protractor 追加 4 条角-角连线。
+  // 本实现的结算按格 8 邻域展开，没有这一层，因此这两件目前只做累积。
+  telescope: (v) => ({
     summary: '每转累积 1 层',
     lines: [{ when: EACH_SPIN, effect: '累积 +1' }],
     selfValueOnly: true,
-    gap: '累积值只作记录，没有消耗它的规则。',
+    gap: `原版在第 ${n(v, 0)} 层起会把全场的同类符号归入同一组、组内互相视为相邻；当前结算只按八邻域展开，该效果暂不生效。`,
   }),
-  protractor: () => ({
+  protractor: (v) => ({
     summary: '每转累积 1 层',
     lines: [{ when: EACH_SPIN, effect: '累积 +1' }],
     selfValueOnly: true,
-    gap: '累积值只作记录，没有消耗它的规则。',
+    gap: `原版在第 ${n(v, 0)} 层起会让棋盘四角互视为相邻；当前结算只按八邻域展开，该效果暂不生效。`,
   }),
-  frozen_pizza: () => ({
-    summary: '每转累积 1 层',
-    lines: [{ when: EACH_SPIN, effect: '累积 +1' }],
+  frozen_pizza: (v) => ({
+    summary: '每转累积；达到上限后追加一次符号奖励',
+    lines: [
+      { when: EACH_SPIN, effect: '累积 +1' },
+      { when: `累积达到 ${n(v, 0)} 时`, effect: '付租奖励时额外获得一次符号三选一，累积清零' },
+    ],
     selfValueOnly: true,
-    gap: '累积值只作记录，没有消耗它的规则。',
   }),
-  treasure_map: () => ({
-    summary: '每转累积 1 层',
-    lines: [{ when: EACH_SPIN, effect: '累积 +1' }],
+  treasure_map: (v) => ({
+    summary: '每转累积，达到上限后挖出钥匙与宝箱',
+    lines: [
+      { when: EACH_SPIN, effect: '累积 +1' },
+      { when: `累积达到 ${n(v, 0)} 时`, effect: '获得钥匙与宝箱，宝藏图本身消耗' },
+    ],
     selfValueOnly: true,
-    gap: '原版累积达到阈值会生成钥匙，本实现未接入。',
+    gap: `累积未达 ${n(v, 0)} 之前无法被摧毁。`,
   }),
 
   /* ── 只改道具自身价值 ── */
@@ -644,19 +653,22 @@ const DESC: Record<string, Builder> = {
     selfValueOnly: true,
   }),
   piggy_bank: (v) => ({
-    summary: '将自身价值转化为累积',
+    summary: '将自身价值转化为累积；付不起租时可销毁换钱',
     lines: [
       { when: EACH_SPIN, effect: `道具自身价值 -${n(v, 0)}` },
       { when: EACH_SPIN, effect: `累积 +${n(v, 0)}` },
+      { when: '付不起租时销毁', effect: `获得 累积 × ${n(v, 1)} 金币，同时对房东造成等量伤害` },
     ],
     selfValueOnly: true,
-    gap: `被摧毁后按累积值给予金币的规则（数值 ${n(v, 1)}）在本实现中未接入。`,
   }),
   swear_jar: (v) => ({
-    summary: '自身价值为负',
-    lines: [{ when: EACH_SPIN, effect: `道具自身价值 -${n(v, 0)}` }],
+    summary: '自身价值为负；付不起租时可销毁换钱',
+    lines: [
+      { when: EACH_SPIN, effect: `道具自身价值 -${n(v, 0)}` },
+      { when: '付不起租时销毁', effect: `获得 累积 × ${n(v, 1)} 金币，同时对房东造成等量伤害` },
+    ],
     selfValueOnly: true,
-    gap: `原版累积达到 ${n(v, 2)} 会给予金币，本实现未接入。`,
+    gap: `累积上限 ${n(v, 2)}。`,
   }),
   black_cat: (v) => ({
     summary: '提高猫的倍率；自身价值较高',
@@ -664,7 +676,7 @@ const DESC: Record<string, Builder> = {
       { when: EACH_SPIN, effect: `场上每个猫的本轮倍率 ×${n(v, 2)}${STACK_POW}` },
       { when: '持有期间', effect: `道具自身价值 +${n(v, 0)}（不参与产出）` },
     ],
-    gap: `第 2 个数值 ${n(v, 1)} 在本实现中没有对应规则（原版用于「被摧毁时给金币」）。`,
+    gap: `第 2 个数值 ${n(v, 1)} 在原版数据表中未被引用，不参与结算。`,
   }),
   lefty_the_rabbit: (v) => ({
     summary: '累积后生成兔毛，并提高第一列兔子与兔毛的倍率',
@@ -746,7 +758,7 @@ const DESC: Record<string, Builder> = {
         effect: `在空位生成 1 个种子，并把累计摧毁数扣掉 ${n(v, 0)}`,
       },
     ],
-    gap: '依赖一个全局「被摧毁符号」计数器，本实现的引擎没有维护它，因此这条可能一直不触发。',
+    gap: '该规则需要记录全场累计摧毁数，当前结算管线未维护这个计数，因此短期内不会触发。',
   }),
   void_portal: (v) => ({
     summary: '按已摧毁的符号种类数缩放自身价值',
@@ -755,7 +767,7 @@ const DESC: Record<string, Builder> = {
       { when: EACH_SPIN, effect: `道具自身价值被抬到「记录值 ÷ ${n(v, 1)}」，只升不降` },
     ],
     selfValueOnly: true,
-    gap: `第 1 个数值 ${n(v, 0)} 在本实现中没有对应规则。`,
+    gap: `第 1 个数值 ${n(v, 0)} 在原版数据表中未被引用，不参与结算。`,
   }),
 
   /* ── 换位 ── */

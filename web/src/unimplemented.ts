@@ -28,14 +28,12 @@ export function isUnimplemented(id: string): boolean {
 // 从这份清单里拿掉一项的前提是真的实现了效果，并同步补上描述。
 export const UNIMPLEMENTED_ITEMS: ReadonlySet<string> = new Set<string>([
   'ancient_lizard_blade',
-  'bag_of_holding',
   'capsule_machine',
   'checkered_flag',
   'clear_sky',
   'comfy_pillow',
   'copycat',
   'cursed_katana',
-  'devils_deal',
   'gray_pepper',
   'item_missing',
   'lime_pepper',
@@ -43,7 +41,6 @@ export const UNIMPLEMENTED_ITEMS: ReadonlySet<string> = new Set<string>([
   'popsicle',
   'quiver',
   'time_machine',
-  'void_party',
 ]);
 
 export function isItemUnimplemented(id: string): boolean {

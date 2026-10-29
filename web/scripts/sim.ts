@@ -49,21 +49,34 @@ interface RunResult {
   rounds: RoundLog[];
 }
 
-/** 按估值取卡：每次 spin 后 / 付租后各有一轮三选一 */
+/**
+ * 按估值取卡。
+ *
+ * 付租奖励现在是**两批连续三选一**（符号 + 道具）：`buyFromShop` 内部会
+ * `closeShop` 并自动开下一批，所以这里必须循环到商店真正关闭，
+ * 否则第二批（道具位）会被漏掉、或者被多余的 closeShop 白吃掉。
+ */
 function takeFromShop(game: ReturnType<typeof createGame>, buy: number): void {
-  if (!game.shopOpen) return;
-  for (let k = 0; k < buy && game.shop.length > 0; k += 1) {
-    let best = 0;
-    let bestValue = -Infinity;
-    game.shop.forEach((card, i) => {
-      if (card.def.value > bestValue) {
-        bestValue = card.def.value;
-        best = i;
-      }
-    });
-    buyFromShop(game, best);
+  let guard = 0;
+  while (game.shopOpen && guard < 8) {
+    guard += 1;
+    let took = false;
+    for (let k = 0; k < buy && game.shop.length > 0; k += 1) {
+      let best = 0;
+      let bestValue = -Infinity;
+      game.shop.forEach((card, i) => {
+        if (card.def.value > bestValue) {
+          bestValue = card.def.value;
+          best = i;
+        }
+      });
+      if (!buyFromShop(game, best)) break;
+      took = true;
+    }
+    // 一张都没买到（或已经买够）→ 跳过当前这批，closeShop 会推进到下一批
+    if (!took) closeShop(game);
+    if (buy === 0) closeShop(game);
   }
-  closeShop(game);
 }
 
 /** 一局：付租前尽量旋转（每次旋转后取卡），付租后再取一次 */

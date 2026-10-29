@@ -54,15 +54,26 @@ function readObjects(name) {
   });
 }
 
-/** Python 字面量列表 -> JS 数组：['a', 'b'] / [1, 2] / [] */
+/**
+ * Python 字面量列表 -> JS 数组：['a', 'b'] / [1, 2] / []
+ *
+ * `data/fine_print.csv` 的 reliant_types / reliant_groups 是**裸字符串**
+ * （`item_guillotine`、`triggerhex`、`coin`），不是列表。早期实现对这类输入
+ * 走了 `.slice(1, -1)`，把首尾字符各切掉一个，于是细则
+ * 8/13/17/18/19/20/32/33/34/36/37 的依赖项变成 `riggerhe` / `tem_guillotin`
+ * 这类残串，依赖门控永远不成立（细则依然会被抽到，但 dynamic_icon 拿不到）。
+ */
 function pyList(raw) {
   const s = (raw ?? '').trim();
   if (!s || s === '[]') return [];
   const asJson = s.replace(/'/g, '"');
   try {
     const v = JSON.parse(asJson);
-    return Array.isArray(v) ? v : [];
+    // 裸标量（`'a'` → "a"、`123`、`true`）也当单元素列表
+    return Array.isArray(v) ? v : [v];
   } catch {
+    // 既不是 JSON 数组也不是 JSON 标量：裸字符串，或 Python 风格列表 `[a, b]`
+    if (!s.startsWith('[')) return [s.replace(/^['"]|['"]$/g, '')];
     return s
       .slice(1, -1)
       .split(',')
@@ -76,8 +87,10 @@ const num = (v) => Number.parseFloat(v) || 0;
 function buildSymbols() {
   return readObjects('symbols.csv').map((r) => ({
     id: r.id,
+    // 面板值在原版是 `value = int(symbol.value)`，取整有据；
+    // 但 `values[]` 是效果参数，含小数（hex_of_tedium 1.2 / shiny_pebble 1.1），必须原样保留
     value: Math.trunc(num(r.value)),
-    values: pyList(r.values).map((x) => Math.trunc(Number(x) || 0)),
+    values: pyList(r.values).map((x) => Number(x) || 0),
     // 空 rarity 表示该符号不进入任何商店池（dud / empty / 骰子变体等）
     rarity: r.rarity,
     groups: pyList(r.groups),
@@ -95,7 +108,8 @@ function buildPool(name, effectsById) {
     return {
       id: r.id,
       value: 0,
-      values: pyList(r.values).map((x) => Math.trunc(Number(x) || 0)),
+      // 精华参数同样含小数（lucky_cat_essence 2.5 / looting_glove_essence 3.5）
+      values: pyList(r.values).map((x) => Number(x) || 0),
       rarity: r.rarity || 'common',
       groups: pyList(r.groups),
       sfx: [],
@@ -180,7 +194,8 @@ function buildFinePrint() {
     difficulty: Number.parseInt(r.difficulty, 10) || 0,
     reliantTypes: pyList(r.reliant_types),
     reliantGroups: pyList(r.reliant_groups),
-    values: pyList(r.values).map((x) => Math.trunc(Number(x) || 0)),
+    // 细则 23 的 values[0] = 2.5 是除数，截成 2 会让稀有度权重修正偏差 25%
+    values: pyList(r.values).map((x) => Number(x) || 0),
   }));
 }
 
@@ -253,10 +268,16 @@ const effects = buildEffects();
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
+/** rarity.json 是 { symbol: [], item: [] }，条数要按分组合计；数组直接取 length */
+const countOf = (data) =>
+  Array.isArray(data)
+    ? data.length
+    : Object.values(data).reduce((n, v) => n + (Array.isArray(v) ? v.length : 1), 0);
+
 const write = (name, data) => {
   fs.writeFileSync(path.join(OUT_DIR, name), JSON.stringify(data, null, 2) + '\n', 'utf8');
   const kb = (JSON.stringify(data).length / 1024).toFixed(1);
-  console.log(`  ${name.padEnd(16)} ${String(data.length ?? 0).padStart(4)} 条  ${kb} KB`);
+  console.log(`  ${name.padEnd(16)} ${String(countOf(data)).padStart(4)} 条  ${kb} KB`);
 };
 
 console.log('从 data/ 编译数据分析表：');

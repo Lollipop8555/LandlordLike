@@ -8,7 +8,7 @@ import rarityJson from './data/rarity.json';
 import effectsJson from './data/effects.json';
 import itemFinePrintJson from './data/itemFinePrint.json';
 import type { EffectRule, ItemDef, RentRow, Rarity, RarityRow, SymbolDef } from './types';
-import { UNIMPLEMENTED_SYMBOLS } from './unimplemented';
+import { isItemUnimplemented, UNIMPLEMENTED_SYMBOLS } from './unimplemented';
 
 /** symbols.csv：168 个原生符号 */
 const NATIVE_SYMBOLS = symbolsJson as SymbolDef[];
@@ -220,12 +220,21 @@ for (const it of [...ITEMS, ...ESSENCES]) ITEM_BY_ID.set(it.id, it);
 /** 可进入商店的道具（rarity 非空；空 rarity 的是精华与特殊道具） */
 export const SHOP_ITEMS = ITEMS.filter((i) => i.rarity !== '');
 
+/**
+ * 真正参与抽取的道具：与 `DRAWABLE_SYMBOLS` 对称，把「行为还没还原」的那批剔掉。
+ *
+ * 之前只有符号侧做了剔除，道具侧漏了 —— 结果是 16 件登记在
+ * `UNIMPLEMENTED_ITEMS` 里的道具（devils_deal / time_machine / popsicle …）
+ * 依然会出现在商店里，买下来只是一件带数值的持有物，等于白花钱。
+ */
+export const DRAWABLE_ITEMS = SHOP_ITEMS.filter((i) => !isItemUnimplemented(i.id));
+
 /** 每个稀有度档位下的候选道具 id */
 export const ITEM_POOL: Record<Rarity, string[]> = {
-  common: SHOP_ITEMS.filter((i) => i.rarity === 'common').map((i) => i.id),
-  uncommon: SHOP_ITEMS.filter((i) => i.rarity === 'uncommon').map((i) => i.id),
-  rare: SHOP_ITEMS.filter((i) => i.rarity === 'rare').map((i) => i.id),
-  very_rare: SHOP_ITEMS.filter((i) => i.rarity === 'very_rare').map((i) => i.id),
+  common: DRAWABLE_ITEMS.filter((i) => i.rarity === 'common').map((i) => i.id),
+  uncommon: DRAWABLE_ITEMS.filter((i) => i.rarity === 'uncommon').map((i) => i.id),
+  rare: DRAWABLE_ITEMS.filter((i) => i.rarity === 'rare').map((i) => i.id),
+  very_rare: DRAWABLE_ITEMS.filter((i) => i.rarity === 'very_rare').map((i) => i.id),
 };
 
 /** 第 n 次付租时的租金行（1-based）；无尽模式按 §7.4 线性外推 */

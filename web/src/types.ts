@@ -70,6 +70,16 @@ export interface PrevIdentity {
   permanentMultiplier: number;
   valueBonus: number;
   valueMultiplier: number;
+  /**
+   * flat_value_bonus：无视倍率的固定加值（Slot_Icon__Slot_Icon.gd:14）。
+   * 在 `get_non_prev_value` 里于乘算之后无条件加回；
+   * 万能牌（wildcarded）在结算期把 base 整体换成它（`:1095`）。
+   */
+  flatValueBonus?: number;
+  /** wildcarded：万能牌，结算期改用 flat_value_bonus 作为 base */
+  wildcarded?: boolean;
+  /** drained：被汲取，产出归零（`:1081`） */
+  drained?: boolean;
 }
 
 /**
@@ -217,6 +227,13 @@ export interface Cell {
   removalValue?: number;
   /** reroll_value：重摇消耗 */
   rerollValue?: number;
+  /**
+   * 三种代币的产出槽位（Slot_Icon__Slot_Icon.gd:27-41）。
+   * `currency:reroll_token` 的声明写这里，而不是金币的 valueBonus。
+   */
+  rerollMultiplier?: number;
+  removalMultiplier?: number;
+  essenceMultiplier?: number;
   /** pointing_directions：指向数组（箭头类） */
   pointingDirections?: number[];
   /** grown_apples / grown_strawberries：植物生长计数 */

@@ -213,9 +213,9 @@ bronze_arrow|silver_arrow|golden_arrow,4447,4458,"[{""a"":""destroyed"",""b"":fa
 bronze_arrow|silver_arrow|golden_arrow,4447,4464,[],value_multiplier,"{""$self_index"":0}",,,target:adjacent
 bronze_arrow|silver_arrow|golden_arrow,4447,4465,"[{""a"":""type"",""b"":""target""}]",destroyed,true,,,target:adjacent
 reroll_capsule,4466,4472,[],destroyed,true,,,
-reroll_capsule,4466,4473,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""reroll_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+reroll_capsule,4466,4473,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""reroll_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,currency:reroll_token;consumes:capsule_machine_essence
 removal_capsule,4474,4480,[],destroyed,true,,,
-removal_capsule,4474,4481,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""removal_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+removal_capsule,4474,4481,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""removal_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,currency:removal_token;consumes:capsule_machine_essence
 hooligan,4482,4484,"[{""a"":""groups"",""b"":""spiritbox""}]",destroyed,true,,,target:adjacent
 hooligan,4482,4485,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false},{""a"":""groups"",""b"":""spiritbox""}]",value_bonus,"{""$self_index"":0}",,,target:self
 tedium_capsule,4486,4495,[],destroyed,true,,,
@@ -260,7 +260,7 @@ watermelon,4590,4591,"[{""a"":""type"",""b"":""watermelon""},{""a"":{""counted_s
 watermelon,4590,4593,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,when:no_item:fertilizer_essence
 flower,4594,4595,"[{""a"":""type"",""b"":""seed""}]",achievement_value,1,,,
 essence_capsule,4596,4602,[],destroyed,true,,,
-essence_capsule,4596,4603,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""essence_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,consumes:capsule_machine_essence
+essence_capsule,4596,4603,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""essence_capsule""}]",value_bonus,"{""$dyn"":""int(values[0] * capsule_machine_multiplier)""}",,,currency:essence_token;consumes:capsule_machine_essence
 dud,4604,4605,"[{""a"":""times_displayed"",""b"":{""$self_index"":0},""greater_than_eq"":true}]",destroyed,true,,,
 dog,4606,4613,"[{""a"":""type"",""b"":""dog"",""not_prev"":true}]",type,"""wolf""",,,when:item:quigley_the_wolf_essence
 comedian,4614,4616,"[{""a"":""groups"",""b"":""funny""}]",value_multiplier,"{""$self_index"":0}",,,target:adjacent
@@ -288,6 +288,6 @@ goldfish,4656,4659,"[{""a"":""destroyed"",""b"":true},{""a"":""tbd"",""b"":false
 gambler,4660,4661,"[{""a"":""destroyed"",""b"":true},{""a"":""type"",""b"":""gambler""}]",value_bonus,"{""$dyn"":""times_displayed * values[1]""}",,,
 dove,4662,4664,[],indestructible,true,,,target:adjacent
 sand_dollar,4665,4666,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""sand_dollar""}]",value_bonus,"{""$self_index"":0}",,,
-jellyfish,4667,4668,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""jellyfish""}]",value_bonus,"{""$self_index"":0}",,,
-pufferfish,4669,4670,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""pufferfish""}]",value_bonus,"{""$self_index"":0}",,,
+jellyfish,4667,4668,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""jellyfish""}]",value_bonus,"{""$self_index"":0}",,,currency:removal_token
+pufferfish,4669,4670,"[{""a"":""removed"",""b"":true},{""a"":""type"",""b"":""pufferfish""}]",value_bonus,"{""$self_index"":0}",,,currency:reroll_token
 pufferfish,4669,4717,"[{""a"":""removed"",""b"":true,""not_prev"":true}]",type,"""empty""",,,

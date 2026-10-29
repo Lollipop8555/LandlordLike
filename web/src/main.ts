@@ -1,6 +1,10 @@
 import './styles.css';
 import {
   beginSpin,
+  canRespinReel,
+  payRentWithItem,
+  respinReel,
+  toggleItemEnabled,
   buyFromShop,
   closeShop,
   createGame,
@@ -56,11 +60,13 @@ const ui: GameUi = {
   itemDetail: null,
   removing: false,
   deck: false,
+  deckDetail: null,
   fineprint: false,
   mailbox: false,
   mailOpen: null,
   confirmHome: false,
   swapFrom: null,
+  respinPick: false,
   settingsOpen: false,
 };
 
@@ -559,19 +565,38 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
     case 'pay':
       void doPay();
       return;
+    case 'rescue': {
+      const id = el.dataset.item ?? '';
+      const res = payRentWithItem(game, id);
+      ui.peek = null;
+      if (!res.ok) {
+        pushToast({ icon: '⚠️', title: '无法自救', text: res.message });
+        break;
+      }
+      if (res.paid) {
+        pushToast({ icon: '😈', title: '抵租成功', text: res.message });
+        afterEvent({ t: 'rent', paid: game.rentPaid });
+      } else {
+        pushToast({ icon: '💀', title: '仍然破产', text: res.message });
+      }
+      break;
+    }
     case 'reset':
       finishRun();
       startRun();
       return;
     case 'buy': {
       const idx = Number(el.dataset.index);
-      buyFromShop(game, idx);
-      closeShop(game);
+      // buyFromShop 内部已经推进过一次商店队列（付租奖励是「符号 + 道具」
+      // 两次连续三选一），这里不能再调 closeShop —— 那会白吃掉下一批。
+      const ok = buyFromShop(game, idx);
+      if (!ok) closeShop(game); // 买不下（池满）→ 当作跳过这一批
       ui.peek = null;
       afterEvent({ t: 'buy', stacks: game.items.length });
       break;
     }
     case 'skip':
+      // 跳过当前这一批；若还有下一批（付租后的道具位），closeShop 会接着开店
       closeShop(game);
       ui.peek = null;
       break;
@@ -617,11 +642,25 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
     }
     case 'deck':
       ui.deck = true;
+      ui.deckDetail = null;
       break;
     case 'close-deck':
       if ((event.target as HTMLElement).closest('[data-stop]') && !(event.target as HTMLElement).closest('.ghost-btn')) return;
       ui.deck = false;
+      ui.deckDetail = null;
       break;
+    case 'deck-detail': {
+      // 牌库中点某一行 → 打开该符号的定义面板（叠在牌库之上）
+      const id = el.dataset.id ?? '';
+      if (id) ui.deckDetail = id;
+      break;
+    }
+    case 'close-deck-detail': {
+      const t = event.target as HTMLElement;
+      if (t.closest('[data-stop]') && !t.closest('.icon-btn')) return;
+      ui.deckDetail = null;
+      break;
+    }
     case 'fineprint':
       ui.fineprint = true;
       break;
@@ -669,6 +708,22 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
       ui.swapFrom = null;
       settleSpin();
       return;
+    case 'respin':
+      // 油壶：进入「点一列」模式，点任意格即重摇该格所在列
+      if (!canRespinReel(game)) return;
+      ui.respinPick = true;
+      break;
+    case 'respin-col': {
+      if (!ui.respinPick) return;
+      const idx = Number(el.dataset.index);
+      const col = idx % COLS;
+      const res = respinReel(game, col);
+      ui.respinPick = false;
+      if (!res.ok) pushToast({ icon: '⚠️', title: '无法重摇', text: res.message });
+      else pushToast({ icon: '🛢️', title: '已重摇一列', text: res.message });
+      // 重摇后仍停在停盘窗口：换位按钮若还有效，继续让玩家操作
+      break;
+    }
     case 'inspect': {
       const target = event.target as HTMLElement;
       if (target.closest('.float')) return;
@@ -684,6 +739,13 @@ function handleAction(action: string, el: HTMLElement, event: Event): void {
     case 'inspect-item':
       ui.itemDetail = el.dataset.id ?? null;
       break;
+    case 'toggle-item': {
+      const id = el.dataset.id ?? '';
+      const res = toggleItemEnabled(game, id);
+      if (!res.ok) pushToast({ icon: '⚠️', title: '无法切换', text: res.message });
+      else pushToast({ icon: '🔧', title: '道具状态已更新', text: res.message });
+      break;
+    }
     case 'close-item': {
       const t = event.target as HTMLElement;
       if (t.closest('[data-stop]') && !t.closest('.icon-btn')) return;
@@ -828,6 +890,12 @@ document.addEventListener('keydown', (event) => {
   }
   if (ui.fineprint) {
     ui.fineprint = false;
+    paint();
+    return;
+  }
+  // 牌库详情叠在牌库之上，Esc 先关这一层
+  if (ui.deckDetail) {
+    ui.deckDetail = null;
     paint();
     return;
   }

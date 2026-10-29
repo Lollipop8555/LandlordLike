@@ -6,8 +6,11 @@ import {
   TOKEN_LABEL,
   bossRent,
   canEssenceUpgrade,
+  canRespinReel,
+  canToggleItem,
   poolSummary,
   rentFor,
+  rentRescueOptions,
   unreadMails,
   type GameState,
 } from './engine';
@@ -34,6 +37,8 @@ export interface GameUi {
   removing: boolean;
   /** 牌库面板 */
   deck: boolean;
+  /** 牌库中正在查看定义的那个符号 id（null = 没有打开） */
+  deckDetail: string | null;
   /** 细则面板 */
   fineprint: boolean;
   /** 房东信箱面板 */
@@ -44,6 +49,8 @@ export interface GameUi {
   confirmHome: boolean;
   /** 换位装置：已选中的第一格（还能再点一格完成交换，null 表示还没选） */
   swapFrom: number | null;
+  /** 油壶正在等玩家点一列（点任意格即重摇该格所在列） */
+  respinPick: boolean;
   /** 设置面板（标题页与对局中都能开） */
   settingsOpen: boolean;
 }
@@ -112,7 +119,7 @@ export function renderGame(game: GameState, ui: GameUi): string {
           : `<div class="tile empty" data-slot="${i}" aria-hidden="true"></div>`;
       }
       const synergy = cell.valueBonus;
-      const action = swapping ? 'swap' : ui.removing ? 'remove' : 'inspect';
+      const action = swapping ? 'swap' : ui.respinPick ? 'respin-col' : ui.removing ? 'remove' : 'inspect';
       // 位置信息对键盘操作是必要的：读屏只说符号名，玩家不知道自己在第几格
       const pos = `第 ${Math.floor(i / COLS) + 1} 行第 ${(i % COLS) + 1} 列`;
       const picked = swapping && ui.swapFrom === i ? ' swap-pick' : swapping ? ' swap-open' : '';
@@ -191,6 +198,8 @@ export function renderGame(game: GameState, ui: GameUi): string {
             ? ui.swapFrom === null
               ? '🔀 交换装置：本转可交换两个符号的位置（每转一次），请先选择一个符号'
               : `🔀 已选 ${slotLabel(game, ui.swapFrom)}，请再选择一格完成交换`
+            : ui.respinPick
+            ? '🛢️ 油壶：点击任意一列，把该列的符号重新洗一遍（每转一次）'
             : ui.removing
             ? `移除模式：点击棋盘上任意符号将其删除（每次 ${game.removalCost} 枚移除代币；再次点击按钮取消）`
             : bossMode
@@ -219,7 +228,8 @@ export function renderGame(game: GameState, ui: GameUi): string {
     <div class="actions">
       ${
         game.swapPending
-          ? `<button class="ghost-btn swap-skip" data-action="swap-skip">不换位，继续结算</button>`
+          ? `<button class="ghost-btn swap-skip" data-action="swap-skip">不换位，继续结算</button>
+             ${canRespinReel(game) ? `<button class="ghost-btn" data-action="respin">🛢️ 油壶重摇一列</button>` : ''}`
           : ended
           ? `<button class="big-btn danger" data-action="reset">${
               game.won ? (game.boss ? '🏆 击败房东 · 开始新对局' : '🎉 已通关 · 开始新对局') : '💀 破产 · 重新开始'
@@ -236,6 +246,7 @@ export function renderGame(game: GameState, ui: GameUi): string {
                    付租 ${money(rent)}
                  </button>`
       }
+      ${renderRentRescue(game, canPay)}
     </div>
 
     ${renderProgress(game)}
@@ -245,6 +256,7 @@ export function renderGame(game: GameState, ui: GameUi): string {
   ${ui.detail !== null ? renderDetail(game, ui.detail) : ''}
   ${ui.itemDetail ? renderItemDetail(game, ui.itemDetail) : ''}
   ${ui.deck ? renderDeck(game) : ''}
+  ${ui.deck && ui.deckDetail ? renderDeckDetail(game, ui.deckDetail) : ''}
   ${ui.fineprint ? renderFinePrints(game) : ''}
   ${ui.mailbox ? renderMailbox(game, ui) : ''}
   ${ui.confirmHome ? renderHomeConfirm() : ''}`;
@@ -314,14 +326,28 @@ function renderItemDetail(game: GameState, id: string): string {
         <div class="detail-total">${shownValue}</div>
         <button class="icon-btn" data-action="close-item">✕</button>
       </div>
-      ${renderDeclarations(def.id)}
       ${
-        canEssenceUpgrade(game, id)
-          ? `<button class="ghost-btn essence-up" data-action="essence" data-id="${id}">
-               ${TOKEN_ICON.essence} 精华化 · 升级为精华版（剩余 ${game.essenceTokens} 枚）
-             </button>`
+        held.disabled
+          ? '<p class="muted small" style="color:#e0a020">⏸ 已禁用：该道具的声明不会参与结算</p>'
           : ''
       }
+      ${renderDeclarations(def.id)}
+      <div class="item-actions">
+        ${
+          canToggleItem(game, id)
+            ? `<button class="ghost-btn ${held.disabled ? 'on' : ''}" data-action="toggle-item" data-id="${id}">
+                 ${held.disabled ? '▶ 重新启用该道具' : '⏸ 暂时禁用该道具'}
+               </button>`
+            : ''
+        }
+        ${
+          canEssenceUpgrade(game, id)
+            ? `<button class="ghost-btn essence-up" data-action="essence" data-id="${id}">
+                 ${TOKEN_ICON.essence} 精华化 · 升级为精华版（剩余 ${game.essenceTokens} 枚）
+               </button>`
+            : ''
+        }
+      </div>
       <p class="muted small" style="margin-top:12px">道具不占棋盘格，效果作用于全场符号；道具自身价值不计入每转产出</p>
     </div>
   </div>`;
@@ -434,6 +460,39 @@ function renderShop(game: GameState): string {
   </div>`;
 }
 
+/**
+ * 付不起租时的自救按钮组（`rent_due` 的 `<icon_devils_deal>` 等分支）。
+ *
+ * 只在「旋转用尽、金币不足、且确实持有可销毁道具」时出现。
+ * 原版把这三件道具做成 rent_due 邮件里的可选项，玩家点一下即销毁抵租。
+ */
+function renderRentRescue(game: GameState, canPay: boolean): string {
+  if (!canPay) return '';
+  const owed = rentFor(game.floor, game.rentPaid + 1).rent;
+  if (game.coins >= owed) return '';
+  const options = rentRescueOptions(game);
+  if (options.length === 0) return '';
+
+  const desc: Record<string, string> = {
+    devils_deal: '免去本期租金，但棋盘剩余空位会被填满空格',
+    piggy_bank: '按积累值兑换金币，可能仍不够',
+    swear_jar: '按积累值兑换金币，可能仍不够',
+  };
+  const buttons = options
+    .map(
+      (id) => `
+      <button class="ghost-btn rescue" data-action="rescue" data-item="${id}"
+        title="${desc[id] ?? ''}">
+        销毁 ${symbolName(id)} 抵租
+      </button>`,
+    )
+    .join('');
+  return `<div class="rescue-row">
+    <span class="rescue-label">还差 ${money(owed - game.coins)}，可销毁道具自救：</span>
+    ${buttons}
+  </div>`;
+}
+
 /** 商店卡片的定义面板：选之前能看清值、稀有度、分组与源码声明 */
 function renderPeek(game: GameState, index: number): string {
   const card = game.shop[index];
@@ -513,10 +572,55 @@ function renderDetail(game: GameState, index: number): string {
  * 同一前提的多条声明合并成一句（洒水壶既是「种子数值 +10」又是「种子变植物」）。
  * 拆成两行会让玩家以为条件重复、甚至互相冲突，其实是一个触发两个效果。
  */
+/**
+ * 把「条件相同」的多条声明合并成一句，避免同一个前提重复三遍。
+ *
+ * 但**稀有度分档不能按 `并且` 拼**。`cat` 的三条声明是：
+ *   持有招财猫时，自己稀有度提到「罕见」
+ *   持有招财猫时，自己稀有度提到「稀有」
+ *   持有招财猫时，自己稀有度提到「极稀有」
+ * 机械合并会得到「…提到「罕见」，并且…提到「稀有」，并且…提到「极稀有」」，
+ * 读起来像三个互相冲突的要求。真实语义是「把这三个档位的出现权重一起放大」，
+ * 应当折叠成一句：`持有招财猫时，罕见 / 稀有 / 极稀有的出现权重 ×1.3`。
+ */
 function mergeSameCondition(texts: string[]): string[] {
+  // 稀有度档位句，兼容三种写法：
+  //   `稀有度提到「X」`                    （无条件）
+  //   `<cond>时，稀有度提到「X」`          （旧的「改成某档」语义）
+  //   `<cond>时，X的出现权重 ×1.3`         （`raritymod` 的真实语义，可带或不带条件）
+  // 无条件时把 cond 记为 '' 参与同一套合并（rabbit_fluff / shiny_pebble）
+  const TIER_CONVERT = /^(?:(.+?)时，)?(?:自己)?稀有度提到「(.+?)」$/;
+  const TIER_WEIGHT = /^(?:(.+?)时，)?(.+?)的出现权重 ×(.+)$/;
+
+  /** cond → 依次出现的稀有度标签 */
+  const tiers = new Map<string, string[]>();
+  /** cond → 它在输出里的位置 */
+  const tierAt = new Map<string, number>();
+
   const out: string[] = [];
   const index = new Map<string, number>();
+
+  /** 每个 cond 对应的倍率文本（`raritymod` 那一路才有） */
+  const tierRate = new Map<string, string>();
+
   for (const text of texts) {
+    const weight = TIER_WEIGHT.exec(text);
+    const convert = weight ? null : TIER_CONVERT.exec(text);
+    if (weight || convert) {
+      const cond = (weight ?? convert)![1] ?? '';
+      const label = weight ? weight[2] : convert![2];
+      if (weight) tierRate.set(cond, weight[3]);
+      const at = tierAt.get(cond);
+      if (at === undefined) {
+        tierAt.set(cond, out.length);
+        tiers.set(cond, [label]);
+        out.push(text); // 占位，稍后整体替换
+      } else {
+        tiers.get(cond)!.push(label);
+      }
+      continue;
+    }
+
     const at = text.indexOf('时，');
     if (at <= 0) {
       out.push(text);
@@ -530,6 +634,24 @@ function mergeSameCondition(texts: string[]): string[] {
       out.push(text);
     } else {
       out[seen] = `${out[seen]}，并且${body}`;
+    }
+  }
+
+  // 把占了位的分档句替换成折叠后的版本
+  for (const [cond, labels] of tiers) {
+    const at = tierAt.get(cond)!;
+    const rate = tierRate.get(cond);
+    // 无条件（cond 为空）时不要补「时，」；有条件时统一成 `<cond>时，…`
+    const pre = cond ? `${cond}时，` : '';
+    if (labels.length === 1) {
+      out[at] = rate
+        ? `${pre}${labels[0]}的出现权重 ×${rate}`
+        : `${pre}稀有度提到「${labels[0]}」`;
+    } else if (rate) {
+      // 幸运猫：三档一起按同一倍率放大，折成一句
+      out[at] = `${pre}${labels.join(' / ')} 的出现权重同时 ×${rate}`;
+    } else {
+      out[at] = `${pre}稀有度提到「${labels.join(' / ')}」`;
     }
   }
   return out;
@@ -619,6 +741,49 @@ function renderDeclarations(id: string): string {
       </div>`;
 }
 
+
+/**
+ * 牌库条目的定义面板。
+ *
+ * 牌库是「池里某 id 的汇总」，没有具体的棋盘格实例，因此不能复用
+ * `renderDetail`（那个读的是 `cell` 的实时加成）。这里展示符号**定义**：
+ * 基础值、稀有度、分组、持有/上盘份数，以及 `renderDeclarations` 解析的效果。
+ */
+function renderDeckDetail(game: GameState, id: string): string {
+  const def = SYMBOL_BY_ID.get(id);
+  if (!def) return '';
+  const entry = poolSummary(game).find((e) => e.id === id);
+  const count = entry?.count ?? 0;
+  const total = game.pool.length;
+  // 期望上盘格数 = 20 × (该符号份数 / 池总量)，池未满 20 时恒等于份数
+  const expected = total > 0 ? (Math.min(CELL_COUNT, total) * count) / total : 0;
+  const inPlay = game.cells.filter((c) => c.def?.id === id).length;
+  return `
+  <div class="overlay" data-action="close-deck-detail">
+    <div class="sheet detail" data-stop="1">
+      <div class="detail-hero">
+        <div class="detail-face">${emojiOf(def)}</div>
+        <div>
+          <h2>${symbolName(id)}</h2>
+          <p class="muted small">${RARITY_LABEL[def.rarity as keyof typeof RARITY_LABEL] ?? (def.rarity || '特殊')} · ${groupList(def.groups)}</p>
+        </div>
+        <div class="detail-total">${def.value}</div>
+        <button class="icon-btn" data-action="close-deck-detail">✕</button>
+      </div>
+      <table class="data">
+        <tbody>
+          <tr><td>基础值</td><td class="num">${def.value}</td></tr>
+          <tr><td>持有份数</td><td class="num">×${count}</td></tr>
+          <tr><td>当前上盘</td><td class="num">${inPlay} 格</td></tr>
+          <tr><td>每转期望上盘</td><td class="num">${expected.toFixed(2)} 格</td></tr>
+        </tbody>
+      </table>
+      ${renderDeclarations(id)}
+      <p class="muted small" style="margin-top:12px">这里展示的是符号定义；单格的实时加成（相邻、本轮乘数）请在棋盘上点击该格查看</p>
+    </div>
+  </div>`;
+}
+
 /** 牌库面板：池里每种符号的数量与合计产出（原版 deck_button） */
 function renderDeck(game: GameState): string {
   const entries = poolSummary(game);
@@ -626,12 +791,14 @@ function renderDeck(game: GameState): string {
   const rows = entries
     .map(
       (e) => `
-      <div class="deck-row r-${e.rarity || 'common'}">
+      <button class="deck-row r-${e.rarity || 'common'}" data-action="deck-detail" data-id="${e.id}"
+        title="查看 ${e.name} 的效果定义" aria-label="${e.name}，${e.count} 个，查看定义">
         <span class="deck-face">${e.id === 'dud' ? '🕳️' : emojiOf(SYMBOL_BY_ID.get(e.id) ?? { id: e.id, value: 0, values: [], rarity: '', groups: [], sfx: [] })}</span>
         <span class="deck-name">${e.name}</span>
         <span class="deck-rare">${e.rarity ? (RARITY_LABEL[e.rarity as keyof typeof RARITY_LABEL] ?? e.rarity) : '特殊'}</span>
         <span class="deck-count">×${e.count}</span>
-      </div>`,
+        <span class="deck-peek" aria-hidden="true">?</span>
+      </button>`,
     )
     .join('');
   return `
@@ -639,7 +806,7 @@ function renderDeck(game: GameState): string {
     <div class="sheet" data-stop="1">
       <div class="sheet-head">
         <h2>牌库 · ${total} 个符号</h2>
-        <p class="muted small">符号池中的符号全部参与洗牌，每转上盘比例 ${Math.min(CELL_COUNT, total) ? ((Math.min(CELL_COUNT, total) / Math.max(1, total)) * 100).toFixed(0) : 0}%</p>
+        <p class="muted small">点击任意一行查看效果定义；符号池中的符号全部参与洗牌，每转上盘比例 ${Math.min(CELL_COUNT, total) ? ((Math.min(CELL_COUNT, total) / Math.max(1, total)) * 100).toFixed(0) : 0}%</p>
       </div>
       <div class="deck-list">${rows || '<p class="muted small">符号池为空</p>'}</div>
       <button class="ghost-btn" data-action="close-deck">关闭</button>

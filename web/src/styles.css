@@ -1125,15 +1125,32 @@ button.token-chip.spent { border-color: var(--line); border-style: dashed; backg
   max-height: 52vh; overflow: auto; display: flex; flex-direction: column;
   gap: 6px; margin: 14px 0;
 }
+/* 每行是一个按钮：点击展开该符号的效果定义 */
 .deck-row {
-  display: grid; grid-template-columns: 26px 1fr auto auto; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 26px 1fr auto auto 16px; align-items: center; gap: 10px;
   padding: 7px 10px; border-radius: 10px; font-size: 12.5px;
   background: rgba(18, 26, 42, 0.7); border: 1px solid #1d2740;
+  width: 100%; text-align: left; color: inherit; font-family: inherit;
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.deck-row:hover,
+.deck-row:focus-visible {
+  border-color: rgba(120, 170, 255, 0.55);
+  background: rgba(26, 38, 60, 0.85);
+  outline: none;
 }
 .deck-face { font-size: 16px; }
 .deck-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .deck-rare { font-size: 10px; color: var(--muted); }
 .deck-count { font-family: var(--mono); color: var(--text); }
+/* 行尾的「?」：提示这一行可以点开 */
+.deck-peek {
+  font-size: 10px; line-height: 1; color: var(--muted);
+  width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid #2a3650;
+}
+.deck-row:hover .deck-peek { color: #9ec2ff; border-color: rgba(120, 170, 255, 0.55); }
 
 /* ─────────── 细则面板 ─────────── */
 
